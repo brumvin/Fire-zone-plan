@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V22</title>
+<title>Fire Zone Plan Builder V23</title>
 <style>
 :root{--navy:#102f3f;--orange:#ed6a32;--green:#19704d;--blue:#1769aa;--bg:#edf2f4;--muted:#687981;--red:#b83232}
 *{box-sizing:border-box}
@@ -33,7 +33,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </style>
 </head>
 <body>
-<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V22 · connected-structure wall scanner · no API key</div></header>
+<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V23 · envelope-cleaned wall scanner · no API key</div></header>
 <main>
 <section class="card">
 <h2>1. Site details</h2>
@@ -56,7 +56,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </div>
 <input id="camera" type="file" accept="image/*" capture="environment" hidden>
 <input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Upload a clear photo. V22 detects candidate lines, squares them, then keeps the dominant connected building structure so isolated page edges and handwriting are discarded.</div>
+<div id="status" class="status">Upload a clear photo. V23 detects candidate lines, squares them, keeps the connected building structure, then removes short arrow-like stubs outside the building envelope.</div>
 <div class="preview" id="preview">No image loaded</div>
 <div id="scanControls" class="hidden">
 <div class="rangeRow"><label for="sensitivity">Wall sensitivity</label><input id="sensitivity" type="range" min="20" max="80" value="58"><output id="sensitivityOut">58</output></div>
@@ -428,12 +428,53 @@ function cleanTopology(input){
   return filtered.filter((_,i)=>mainSet.has(i));
 }
 
+
+function endpointDegree(w,which,all,tol=14){
+  const p=which===1?[w.x1,w.y1]:[w.x2,w.y2];
+  let n=0;
+  for(const o of all){
+    if(o===w)continue;
+    if(pointSegDistance(p[0],p[1],o)<=tol)n++;
+  }
+  return n;
+}
+function removeEnvelopeStubs(input){
+  if(input.length<4)return input;
+  const longs=input.filter(w=>wallLength(w)>=160);
+  const xs=[],ys=[];
+  for(const w of longs.length?longs:input){
+    xs.push(w.x1,w.x2);ys.push(w.y1,w.y2);
+  }
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  return input.filter(w=>{
+    const len=wallLength(w),d1=endpointDegree(w,1,input),d2=endpointDegree(w,2,input);
+    if(len>120)return true;
+
+    // Short one-ended stubs projecting beyond the dominant building envelope
+    // are usually entrance/fire-exit arrows or page marks, not structural walls.
+    const oneEnded=(d1===0&&d2>0)||(d2===0&&d1>0);
+    if(oneEnded){
+      const free = d1===0 ? [w.x1,w.y1] : [w.x2,w.y2];
+      if(free[0]<minX-10||free[0]>maxX+10||free[1]<minY-10||free[1]>maxY+10) return false;
+    }
+
+    // Vertical stubs immediately above/below the main envelope are especially
+    // common in the benchmark because of FIRE EXIT / MAIN ENTRANCE arrows.
+    if(w.axis==='V' && len<95){
+      const outsideTop=Math.min(w.y1,w.y2)<minY-8 && Math.max(w.y1,w.y2)<=minY+28;
+      const outsideBottom=Math.max(w.y1,w.y2)>maxY+8 && Math.min(w.y1,w.y2)>=maxY-28;
+      if(outsideTop||outsideBottom)return false;
+    }
+    return true;
+  });
+}
 async function runScan(){
   if(!sourceImg){$('status').textContent='Choose or take a photo first.';return}
   $('status').textContent='Scanning and rebuilding connected wall geometry…';
   $('scanBtn').disabled=true;
   try{
     walls=cleanTopology((await detectFast()).map(normaliseWall));
+    walls=removeEnvelopeStubs(walls);
     connectIntersections();
     history=[];selected=-1;
     $('resultCard').classList.remove('hidden');
@@ -510,7 +551,7 @@ function straighten(){
   save();walls=walls.map(normaliseWall);connectIntersections();renderAll();
 }
 $('straightenBtn').onclick=straighten;
-$('cleanupBtn').onclick=()=>{save();walls=cleanTopology(walls);connectIntersections();renderAll();$('status').textContent='Disconnected page-edge/text strokes removed; dominant connected wall structure retained.'};
+$('cleanupBtn').onclick=()=>{save();walls=cleanTopology(walls);walls=removeEnvelopeStubs(walls);connectIntersections();renderAll();$('status').textContent='Disconnected strokes and entrance/exit arrow-like stubs removed; connected wall structure retained.'};
 $('editBtn').onclick=()=>{$('editCard').classList.remove('hidden');renderAll();$('editCard').scrollIntoView({behavior:'smooth'})};
 
 function svgPoint(e){
