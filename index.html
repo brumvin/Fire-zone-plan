@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V20</title>
+<title>Fire Zone Plan Builder V21</title>
 <style>
 :root{--navy:#102f3f;--orange:#ed6a32;--green:#19704d;--blue:#1769aa;--bg:#edf2f4;--muted:#687981;--red:#b83232}
 *{box-sizing:border-box}
@@ -33,7 +33,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </style>
 </head>
 <body>
-<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V20 · fast local wall scanner · no OpenCV · no API key</div></header>
+<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V21 · topology-cleaned wall scanner · no API key</div></header>
 <main>
 <section class="card">
 <h2>1. Site details</h2>
@@ -56,7 +56,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </div>
 <input id="camera" type="file" accept="image/*" capture="environment" hidden>
 <input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Upload a clear photo. V20 uses a lightweight local-contrast scanner designed to stay responsive on phones and tablets.</div>
+<div id="status" class="status">Upload a clear photo. V21 first detects candidate lines, then removes isolated handwriting strokes and rebuilds a connected orthogonal wall graph.</div>
 <div class="preview" id="preview">No image loaded</div>
 <div id="scanControls" class="hidden">
 <div class="rangeRow"><label for="sensitivity">Wall sensitivity</label><input id="sensitivity" type="range" min="20" max="80" value="58"><output id="sensitivityOut">58</output></div>
@@ -79,7 +79,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 <div class="pane"><h4>Original photo</h4><div class="preview" id="originalPane">No photo</div></div>
 <div class="pane"><h4>Clean structural plan</h4><div class="canvasWrap"><svg id="plan" viewBox="0 0 760 500" aria-label="Detected wall plan"></svg></div></div>
 </div>
-<div class="actions" style="margin-top:10px"><button id="straightenBtn" class="blue">Straighten plan</button><button id="editBtn" class="navy">Edit walls</button><button id="rescanBtn">Re-scan image</button></div>
+<div class="actions" style="margin-top:10px"><button id="straightenBtn" class="blue">Straighten plan</button><button id="cleanupBtn">Remove isolated lines</button><button id="editBtn" class="navy">Edit walls</button></div><div class="actions"><button id="rescanBtn">Re-scan image</button></div>
 </section>
 
 <section id="editCard" class="card hidden">
@@ -303,12 +303,97 @@ function connectIntersections(){
   }
 }
 
+
+function pointSegDistance(px,py,w){
+  const dx=w.x2-w.x1,dy=w.y2-w.y1,L=dx*dx+dy*dy||1;
+  const t=Math.max(0,Math.min(1,((px-w.x1)*dx+(py-w.y1)*dy)/L));
+  const qx=w.x1+t*dx,qy=w.y1+t*dy;
+  return Math.hypot(px-qx,py-qy);
+}
+function wallConnected(a,b,tol=16){
+  const pts=[[a.x1,a.y1],[a.x2,a.y2]];
+  return pts.some(p=>pointSegDistance(p[0],p[1],b)<=tol) ||
+         [[b.x1,b.y1],[b.x2,b.y2]].some(p=>pointSegDistance(p[0],p[1],a)<=tol);
+}
+function clusterCoords(vals,tol=10){
+  vals=vals.slice().sort((a,b)=>a-b);
+  const groups=[];
+  for(const v of vals){
+    const g=groups[groups.length-1];
+    if(!g||Math.abs(v-g[g.length-1])>tol)groups.push([v]);else g.push(v);
+  }
+  return groups.map(g=>g.reduce((a,b)=>a+b,0)/g.length);
+}
+function nearestCluster(v,clusters){
+  let best=v,d=Infinity;for(const c of clusters){const q=Math.abs(v-c);if(q<d){d=q;best=c}}return d<=12?snap(best):v;
+}
+function cleanTopology(input){
+  let a=input.map(normaliseWall);
+
+  // Reject obvious canvas/paper-frame artefacts.
+  a=a.filter(w=>{
+    if(w.axis==='H'&&(w.y1<18||w.y1>H-18))return false;
+    if(w.axis==='V'&&(w.x1<18||w.x1>W-18))return false;
+    return true;
+  });
+
+  // Strong structural walls act as anchors.
+  const anchors=a.filter(w=>wallLength(w)>=105);
+  a=a.filter(w=>{
+    if(wallLength(w)>=105)return true;
+    if(wallLength(w)<45)return false;
+    // Shorter lines must connect to real structure; this removes most room-name strokes.
+    let connections=0;
+    for(const o of anchors){if(o!==w&&wallConnected(w,o,15))connections++}
+    return connections>0;
+  });
+
+  // Snap repeated wall coordinates onto a common orthogonal grid.
+  const xs=clusterCoords(a.filter(w=>w.axis==='V').map(w=>w.x1),11);
+  const ys=clusterCoords(a.filter(w=>w.axis==='H').map(w=>w.y1),11);
+  a=a.map(w=>{
+    if(w.axis==='H'){const y=nearestCluster(w.y1,ys);return {...w,y1:y,y2:y,x1:snap(w.x1),x2:snap(w.x2)}}
+    const x=nearestCluster(w.x1,xs);return {...w,x1:x,x2:x,y1:snap(w.y1),y2:snap(w.y2)}
+  });
+
+  // Extend close ends to perpendicular intersections (door-sized gaps remain if larger).
+  const hs=a.filter(w=>w.axis==='H'),vs=a.filter(w=>w.axis==='V');
+  for(const h of hs)for(const v of vs){
+    const x=v.x1,y=h.y1;
+    if(x>=h.x1-18&&x<=h.x2+18&&y>=v.y1-18&&y<=v.y2+18){
+      if(Math.abs(h.x1-x)<=18)h.x1=x;
+      if(Math.abs(h.x2-x)<=18)h.x2=x;
+      if(Math.abs(v.y1-y)<=18)v.y1=y;
+      if(Math.abs(v.y2-y)<=18)v.y2=y;
+    }
+  }
+
+  // De-duplicate overlapping walls after snapping.
+  const out=[];
+  for(const w of a){
+    let dup=false;
+    for(const o of out){
+      if(w.axis!==o.axis)continue;
+      if(w.axis==='H'&&Math.abs(w.y1-o.y1)<=5&&overlap1D(w.x1,w.x2,o.x1,o.x2,10)){
+        o.x1=Math.min(o.x1,w.x1);o.x2=Math.max(o.x2,w.x2);dup=true;break;
+      }
+      if(w.axis==='V'&&Math.abs(w.x1-o.x1)<=5&&overlap1D(w.y1,w.y2,o.y1,o.y2,10)){
+        o.y1=Math.min(o.y1,w.y1);o.y2=Math.max(o.y2,w.y2);dup=true;break;
+      }
+    }
+    if(!dup)out.push({...w});
+  }
+
+  // Final structural filter: isolated lines under 90 units are almost always text/noise.
+  return out.filter(w=>wallLength(w)>=90 || out.some(o=>o!==w&&wallConnected(w,o,12)));
+}
+
 async function runScan(){
   if(!sourceImg){$('status').textContent='Choose or take a photo first.';return}
-  $('status').textContent='Fast structural scan running…';
+  $('status').textContent='Scanning and rebuilding connected wall geometry…';
   $('scanBtn').disabled=true;
   try{
-    walls=(await detectFast()).map(normaliseWall);
+    walls=cleanTopology((await detectFast()).map(normaliseWall));
     connectIntersections();
     history=[];selected=-1;
     $('resultCard').classList.remove('hidden');
@@ -316,7 +401,7 @@ async function runScan(){
     if(walls.length<4){
       $('status').textContent='Only '+walls.length+' reliable wall'+(walls.length===1?'':'s')+' detected. Try Wall sensitivity around 55–65 and Minimum wall length around 50–65, then scan again.';
     }else{
-      $('status').textContent='Fast scan complete: '+walls.length+' straight structural walls detected. Review before editing.';
+      $('status').textContent='Topology-cleaned scan complete: '+walls.length+' straight structural walls detected. Review before editing.';
     }
     $('resultCard').scrollIntoView({behavior:'smooth'});
   }catch(e){
@@ -385,6 +470,7 @@ function straighten(){
   save();walls=walls.map(normaliseWall);connectIntersections();renderAll();
 }
 $('straightenBtn').onclick=straighten;
+$('cleanupBtn').onclick=()=>{save();walls=cleanTopology(walls);connectIntersections();renderAll();$('status').textContent='Isolated text-like strokes removed and connected walls retained.'};
 $('editBtn').onclick=()=>{$('editCard').classList.remove('hidden');renderAll();$('editCard').scrollIntoView({behavior:'smooth'})};
 
 function svgPoint(e){
