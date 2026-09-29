@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V18</title>
+<title>Fire Zone Plan Builder V19</title>
 <style>
 :root{--navy:#102f3f;--orange:#ed6a32;--green:#19704d;--blue:#1769aa;--bg:#edf2f4;--muted:#687981;--red:#b83232}
 *{box-sizing:border-box}
@@ -33,7 +33,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </style>
 </head>
 <body>
-<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V18 · browser wall scanner · automatic straightening · no API key</div></header>
+<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V19 · enhanced OpenCV wall scanner · automatic straightening · no API key</div></header>
 <main>
 <section class="card">
 <h2>1. Site details</h2>
@@ -56,13 +56,13 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </div>
 <input id="camera" type="file" accept="image/*" capture="environment" hidden>
 <input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Upload a clear photo. The scanner will look for long structural lines, square near-horizontal/vertical walls, and ignore most handwriting.</div>
+<div id="status" class="status">Upload a clear photo. The enhanced scanner uses local contrast plus line detection, so shadows and grey paper should no longer be mistaken for walls.</div>
 <div class="preview" id="preview">No image loaded</div>
 <div id="scanControls" class="hidden">
-<div class="rangeRow"><label for="sensitivity">Wall sensitivity</label><input id="sensitivity" type="range" min="20" max="80" value="48"><output id="sensitivityOut">48</output></div>
-<div class="rangeRow"><label for="minLength">Minimum wall length</label><input id="minLength" type="range" min="35" max="180" value="75"><output id="minLengthOut">75</output></div>
+<div class="rangeRow"><label for="sensitivity">Wall sensitivity</label><input id="sensitivity" type="range" min="20" max="80" value="60"><output id="sensitivityOut">60</output></div>
+<div class="rangeRow"><label for="minLength">Minimum wall length</label><input id="minLength" type="range" min="35" max="180" value="55"><output id="minLengthOut">55</output></div>
 <div class="rangeRow"><label for="mergeGap">Join nearby lines</label><input id="mergeGap" type="range" min="3" max="18" value="8"><output id="mergeGapOut">8</output></div>
-<div class="actions"><button id="scanBtn" class="orange">Run structural scan</button><button id="resetBtn">Reset</button><button id="benchmarkBtn">Use reference geometry</button></div>
+<div class="actions"><button id="scanBtn" class="orange">Run enhanced structural scan</button><button id="resetBtn">Reset</button><button id="benchmarkBtn">Use reference geometry</button></div><div class="small">The first scan may take a few seconds while the computer-vision engine loads in your browser.</div>
 </div>
 </section>
 
@@ -122,12 +122,22 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </section>
 </main>
 
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 $('date').value=new Date().toISOString().slice(0,10);
 
 let source='', sourceImg=null, walls=[], selected=-1, drag=null, history=[];
 const W=760,H=500;
+async function getCv(){
+  if(typeof cv==='undefined') throw new Error('OpenCV is still loading. Wait a few seconds and try again.');
+  let c=cv;
+  if(c instanceof Promise)c=await c;
+  if(!c.Mat){
+    await new Promise(resolve=>{c.onRuntimeInitialized=resolve});
+  }
+  return c;
+}
 
 function save(){history.push(JSON.stringify(walls));if(history.length>30)history.shift()}
 function undo(){if(!history.length)return;walls=JSON.parse(history.pop());selected=-1;renderAll()}
@@ -165,93 +175,99 @@ $('picker').onchange=e=>handleFile(e.target.files[0]);
   el.oninput=()=>out.value=el.value;
 });
 
-function otsu(gray){
-  const hist=new Array(256).fill(0);
-  for(let i=0;i<gray.length;i++)hist[gray[i]]++;
-  const total=gray.length;let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];
-  let sumB=0,wB=0,best=0,max=0;
-  for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=total-wB;if(!wF)break;sumB+=t*hist[t];const mB=sumB/wB,mF=(sum-sumB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>max){max=v;best=t}}
-  return best;
-}
-
-function buildBinary(){
-  const c=document.createElement('canvas');c.width=W;c.height=H;
-  const ctx=c.getContext('2d',{willReadFrequently:true});
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+async function detectWithOpenCV(){
+  const c=await getCv();
+  const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   const s=Math.min(W/sourceImg.width,H/sourceImg.height),dw=sourceImg.width*s,dh=sourceImg.height*s,ox=(W-dw)/2,oy=(H-dh)/2;
   ctx.drawImage(sourceImg,ox,oy,dw,dh);
-  const d=ctx.getImageData(0,0,W,H).data,gray=new Uint8Array(W*H);
-  for(let i=0,p=0;i<d.length;i+=4,p++)gray[p]=Math.round(.2126*d[i]+.7152*d[i+1]+.0722*d[i+2]);
-  const base=otsu(gray),sens=+$('sensitivity').value;
-  const threshold=clamp(base+(50-sens)*1.35,55,210);
-  const bin=new Uint8Array(W*H);
-  for(let i=0;i<gray.length;i++)bin[i]=gray[i]<threshold?1:0;
-  return bin;
-}
 
-function supportH(bin,y,x){
-  for(let dy=-2;dy<=2;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;if(bin[yy*W+x])return 1}
-  return 0;
-}
-function supportV(bin,x,y){
-  for(let dx=-2;dx<=2;dx++){const xx=x+dx;if(xx<0||xx>=W)continue;if(bin[y*W+xx])return 1}
-  return 0;
-}
+  let src=c.imread(canvas),gray=new c.Mat(),blur=new c.Mat(),bin=new c.Mat(),lines=new c.Mat();
+  try{
+    c.cvtColor(src,gray,c.COLOR_RGBA2GRAY);
+    c.GaussianBlur(gray,blur,new c.Size(3,3),0,0,c.BORDER_DEFAULT);
+    c.adaptiveThreshold(blur,bin,255,c.ADAPTIVE_THRESH_GAUSSIAN_C,c.THRESH_BINARY_INV,41,12);
 
-function detectSegments(bin){
-  const minLen=+$('minLength').value;
-  const hs=[],vs=[];
-  // Horizontal runs: tolerate short handwriting/gaps, require sustained dark support.
-  for(let y=2;y<H-2;y+=2){
-    let start=-1,last=-1,gap=0,support=0;
-    for(let x=0;x<W;x++){
-      const hit=supportH(bin,y,x);
-      if(hit){if(start<0)start=x;last=x;support++;gap=0}
-      else if(start>=0){gap++;if(gap>8){const len=last-start;if(len>=minLen&&support/Math.max(1,len)>.36)hs.push({x1:start,y1:y,x2:last,y2:y,axis:'H',score:support/len});start=-1;last=-1;gap=0;support=0}}
+    // Remove the very outer image border, which otherwise creates false walls.
+    c.rectangle(bin,new c.Point(0,0),new c.Point(W-1,H-1),new c.Scalar(0),12);
+
+    const minLen=+$('minLength').value;
+    const threshold=Math.max(25,Math.round(95-(+$('sensitivity').value)));
+    const maxGap=Math.max(8,(+$('mergeGap').value)*2);
+    c.HoughLinesP(bin,lines,1,Math.PI/180,threshold,minLen,maxGap);
+
+    const raw=[];
+    for(let i=0;i<lines.rows;i++){
+      const p=lines.data32S.slice(i*4,i*4+4);
+      let [x1,y1,x2,y2]=p,dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);
+      if(len<minLen)continue;
+      let ang=Math.atan2(dy,dx)*180/Math.PI;
+      while(ang>90)ang-=180;while(ang<-90)ang+=180;
+      const horizontal=Math.abs(ang)<=14;
+      const vertical=Math.abs(Math.abs(ang)-90)<=14;
+      if(!horizontal&&!vertical)continue;
+
+      // Reject page/frame artefacts only when extremely close to the canvas edge.
+      if(horizontal && ((y1<10&&y2<10)||(y1>H-10&&y2>H-10)))continue;
+      if(vertical && ((x1<10&&x2<10)||(x1>W-10&&x2>W-10)))continue;
+
+      if(horizontal){
+        const y=snap((y1+y2)/2);
+        raw.push({x1:Math.min(x1,x2),y1:y,x2:Math.max(x1,x2),y2:y,axis:'H',score:len});
+      }else{
+        const x=snap((x1+x2)/2);
+        raw.push({x1:x,y1:Math.min(y1,y2),x2:x,y2:Math.max(y1,y2),axis:'V',score:len});
+      }
     }
-    if(start>=0){const len=last-start;if(len>=minLen&&support/Math.max(1,len)>.36)hs.push({x1:start,y1:y,x2:last,y2:y,axis:'H',score:support/len})}
+    return mergeSegments(raw.filter(w=>w.axis==='H'),'H').concat(mergeSegments(raw.filter(w=>w.axis==='V'),'V'));
+  } finally {
+    src.delete();gray.delete();blur.delete();bin.delete();lines.delete();
   }
-  for(let x=2;x<W-2;x+=2){
-    let start=-1,last=-1,gap=0,support=0;
-    for(let y=0;y<H;y++){
-      const hit=supportV(bin,x,y);
-      if(hit){if(start<0)start=y;last=y;support++;gap=0}
-      else if(start>=0){gap++;if(gap>8){const len=last-start;if(len>=minLen&&support/Math.max(1,len)>.36)vs.push({x1:x,y1:start,x2:x,y2:last,axis:'V',score:support/len});start=-1;last=-1;gap=0;support=0}}
-    }
-    if(start>=0){const len=last-start;if(len>=minLen&&support/Math.max(1,len)>.36)vs.push({x1:x,y1:start,x2:x,y2:last,axis:'V',score:support/len})}
-  }
-  return mergeSegments(hs,'H').concat(mergeSegments(vs,'V'));
 }
 
 function overlap1D(a1,a2,b1,b2,gap){
   return Math.min(a2,b2)-Math.max(a1,b1)>=-gap;
 }
 function mergeSegments(list,a){
-  const gap=+$('mergeGap').value;
-  list=list.sort((p,q)=>(a==='H'?p.y1-q.y1:p.x1-q.x1));
+  const gap=Math.max(5,+$('mergeGap').value);
+  const coord=w=>a==='H'?w.y1:w.x1;
+  list=list.slice().sort((p,q)=>coord(p)-coord(q));
   const out=[];
   for(const raw of list){
-    let w=normaliseWall(raw),merged=false;
-    for(const o of out){
+    let w=normaliseWall(raw),best=-1,bestDist=Infinity;
+    for(let i=0;i<out.length;i++){
+      const o=out[i],d=Math.abs(coord(o)-coord(w));
+      const overlap=a==='H'?overlap1D(o.x1,o.x2,w.x1,w.x2,35):overlap1D(o.y1,o.y2,w.y1,w.y2,35);
+      if(d<=gap+4&&overlap&&d<bestDist){best=i;bestDist=d}
+    }
+    if(best>=0){
+      const o=out[best],wa=o.score||wallLength(o),wb=w.score||wallLength(w),tot=wa+wb;
       if(a==='H'){
-        if(Math.abs(o.y1-w.y1)<=gap&&overlap1D(o.x1,o.x2,w.x1,w.x2,22)){
-          const total=(o.score||1)+(raw.score||1);
-          o.y1=o.y2=snap((o.y1*(o.score||1)+w.y1*(raw.score||1))/total);
-          o.x1=Math.min(o.x1,w.x1);o.x2=Math.max(o.x2,w.x2);o.score=total;merged=true;break;
-        }
+        const y=snap((o.y1*wa+w.y1*wb)/tot);o.y1=o.y2=y;o.x1=Math.min(o.x1,w.x1);o.x2=Math.max(o.x2,w.x2);
       }else{
-        if(Math.abs(o.x1-w.x1)<=gap&&overlap1D(o.y1,o.y2,w.y1,w.y2,22)){
-          const total=(o.score||1)+(raw.score||1);
-          o.x1=o.x2=snap((o.x1*(o.score||1)+w.x1*(raw.score||1))/total);
-          o.y1=Math.min(o.y1,w.y1);o.y2=Math.max(o.y2,w.y2);o.score=total;merged=true;break;
-        }
+        const x=snap((o.x1*wa+w.x1*wb)/tot);o.x1=o.x2=x;o.y1=Math.min(o.y1,w.y1);o.y2=Math.max(o.y2,w.y2);
+      }
+      o.score=tot;
+    }else out.push({...w});
+  }
+
+  // Merge a second time after coordinates have stabilised.
+  const clean=[];
+  for(const w of out.sort((p,q)=>coord(p)-coord(q))){
+    let joined=false;
+    for(const o of clean){
+      const d=Math.abs(coord(o)-coord(w));
+      const overlap=a==='H'?overlap1D(o.x1,o.x2,w.x1,w.x2,45):overlap1D(o.y1,o.y2,w.y1,w.y2,45);
+      if(d<=gap&&overlap){
+        if(a==='H'){o.x1=Math.min(o.x1,w.x1);o.x2=Math.max(o.x2,w.x2)}
+        else{o.y1=Math.min(o.y1,w.y1);o.y2=Math.max(o.y2,w.y2)}
+        joined=true;break;
       }
     }
-    if(!merged)out.push({...w,score:raw.score||1});
+    if(!joined)clean.push({...w});
   }
-  return out.filter(w=>wallLength(w)>=+$('minLength').value);
+  return clean.filter(w=>wallLength(w)>=+$('minLength').value);
 }
-
 function connectIntersections(){
   const gap=14;
   const hs=walls.filter(w=>w.axis==='H'),vs=walls.filter(w=>w.axis==='V');
@@ -264,23 +280,26 @@ function connectIntersections(){
   }
 }
 
-function runScan(){
+async function runScan(){
   if(!sourceImg){$('status').textContent='Choose or take a photo first.';return}
-  $('status').textContent='Scanning structural lines…';
-  setTimeout(()=>{
-    try{
-      const bin=buildBinary();
-      walls=detectSegments(bin).map(normaliseWall);
-      connectIntersections();
-      history=[];selected=-1;
-      $('resultCard').classList.remove('hidden');
-      renderAll();
-      $('status').textContent=walls.length?'Structural scan complete. Review the clean wall plan.':'No reliable long walls detected. Increase Wall sensitivity or reduce Minimum wall length, then scan again.';
-      $('resultCard').scrollIntoView({behavior:'smooth'});
-    }catch(e){$('status').textContent='Scan error: '+e.message}
-  },30);
+  $('status').textContent='Enhanced structural scan running…';
+  $('scanBtn').disabled=true;
+  try{
+    walls=(await detectWithOpenCV()).map(normaliseWall);
+    connectIntersections();
+    history=[];selected=-1;
+    $('resultCard').classList.remove('hidden');
+    renderAll();
+    if(walls.length<4){
+      $('status').textContent='Only '+walls.length+' reliable wall'+(walls.length===1?'':'s')+' detected. Try Wall sensitivity around 55–65 and Minimum wall length around 50–65, then scan again.';
+    }else{
+      $('status').textContent='Enhanced scan complete: '+walls.length+' straight structural walls detected. Review before editing.';
+    }
+    $('resultCard').scrollIntoView({behavior:'smooth'});
+  }catch(e){
+    $('status').textContent='Enhanced scan error: '+e.message;
+  }finally{$('scanBtn').disabled=false}
 }
-
 function referenceWalls(){
   // Clean orthogonal interpretation of the supplied benchmark sketch.
   return [
