@@ -1,0 +1,8 @@
+{
+  "name": "fire-zone-plan",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "openai": "^6.0.0"
+  }
+}
