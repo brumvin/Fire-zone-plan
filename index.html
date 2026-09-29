@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V21</title>
+<title>Fire Zone Plan Builder V22</title>
 <style>
 :root{--navy:#102f3f;--orange:#ed6a32;--green:#19704d;--blue:#1769aa;--bg:#edf2f4;--muted:#687981;--red:#b83232}
 *{box-sizing:border-box}
@@ -33,7 +33,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </style>
 </head>
 <body>
-<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V21 · topology-cleaned wall scanner · no API key</div></header>
+<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V22 · connected-structure wall scanner · no API key</div></header>
 <main>
 <section class="card">
 <h2>1. Site details</h2>
@@ -56,7 +56,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </div>
 <input id="camera" type="file" accept="image/*" capture="environment" hidden>
 <input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Upload a clear photo. V21 first detects candidate lines, then removes isolated handwriting strokes and rebuilds a connected orthogonal wall graph.</div>
+<div id="status" class="status">Upload a clear photo. V22 detects candidate lines, squares them, then keeps the dominant connected building structure so isolated page edges and handwriting are discarded.</div>
 <div class="preview" id="preview">No image loaded</div>
 <div id="scanControls" class="hidden">
 <div class="rangeRow"><label for="sensitivity">Wall sensitivity</label><input id="sensitivity" type="range" min="20" max="80" value="58"><output id="sensitivityOut">58</output></div>
@@ -384,8 +384,48 @@ function cleanTopology(input){
     if(!dup)out.push({...w});
   }
 
-  // Final structural filter: isolated lines under 90 units are almost always text/noise.
-  return out.filter(w=>wallLength(w)>=90 || out.some(o=>o!==w&&wallConnected(w,o,12)));
+  // Keep only lines that belong to the dominant connected building structure.
+  // This removes long but completely isolated page edges / fold lines as well as text strokes.
+  const filtered=out.filter(w=>wallLength(w)>=55 || out.some(o=>o!==w&&wallConnected(w,o,12)));
+  if(filtered.length<2)return filtered;
+
+  const seen=new Set(),components=[];
+  for(let i=0;i<filtered.length;i++){
+    if(seen.has(i))continue;
+    const stack=[i],comp=[];seen.add(i);
+    while(stack.length){
+      const n=stack.pop();comp.push(n);
+      for(let j=0;j<filtered.length;j++){
+        if(seen.has(j))continue;
+        if(wallConnected(filtered[n],filtered[j],18)){seen.add(j);stack.push(j)}
+      }
+    }
+    components.push(comp);
+  }
+
+  components.sort((a,b)=>{
+    const la=a.reduce((s,i)=>s+wallLength(filtered[i]),0);
+    const lb=b.reduce((s,i)=>s+wallLength(filtered[i]),0);
+    return lb-la;
+  });
+
+  const main=components[0]||[];
+  const mainSet=new Set(main);
+  // Retain the main connected structure. Also retain a secondary component only if it is
+  // very close to the main structure, which allows genuine door-separated wall fragments.
+  for(let ci=1;ci<components.length;ci++){
+    for(const idx of components[ci]){
+      const w=filtered[idx];
+      let near=false;
+      for(const mi of main){
+        const m=filtered[mi];
+        if(wallConnected(w,m,28)){near=true;break}
+      }
+      if(near)mainSet.add(idx);
+    }
+  }
+
+  return filtered.filter((_,i)=>mainSet.has(i));
 }
 
 async function runScan(){
@@ -470,7 +510,7 @@ function straighten(){
   save();walls=walls.map(normaliseWall);connectIntersections();renderAll();
 }
 $('straightenBtn').onclick=straighten;
-$('cleanupBtn').onclick=()=>{save();walls=cleanTopology(walls);connectIntersections();renderAll();$('status').textContent='Isolated text-like strokes removed and connected walls retained.'};
+$('cleanupBtn').onclick=()=>{save();walls=cleanTopology(walls);connectIntersections();renderAll();$('status').textContent='Disconnected page-edge/text strokes removed; dominant connected wall structure retained.'};
 $('editBtn').onclick=()=>{$('editCard').classList.remove('hidden');renderAll();$('editCard').scrollIntoView({behavior:'smooth'})};
 
 function svgPoint(e){
