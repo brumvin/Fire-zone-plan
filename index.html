@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V12</title>
+<title>Fire Zone Plan Builder V13</title>
 <style>
 :root{--n:#102f3f;--o:#ed6a32;--g:#19704d;--b:#1769aa;--bg:#edf2f4;--r:#c83d3d;--amber:#b87800}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Arial;background:var(--bg);color:#18262d}
@@ -22,14 +22,14 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
 .output{border:3px solid var(--n);padding:12px;margin-top:10px}
 @media(max-width:850px){.grid,.actions,.tools,.compare,.editorGrid{grid-template-columns:1fr}.workspace{height:480px}.editDock{position:static}.row{grid-template-columns:1.25fr .6fr 1fr 36px}.ctx{grid-template-columns:1fr 1fr}header{padding-top:calc(12px + env(safe-area-inset-top))}}
 </style></head><body>
-<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V12 · two-pass AI scan pipeline · engineer verification</div></header>
+<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V13 · GitHub-only AI scan workflow</div></header>
 <main>
 <section class="card"><h2>1. Site details</h2><div class="grid"><input id="customer" placeholder="Customer"><input id="site" placeholder="Site / building"><input id="floor" placeholder="Floor"><input id="engineer" placeholder="Engineer"><input id="job" placeholder="Joblogic job no."><input id="date" type="date"></div></section>
 
 <section class="card"><h2>2. Scan or upload drawing</h2>
 <div class="actions"><button onclick="camera.click()">Take photo</button><button onclick="picker.click()">Choose photo</button><button class="navy" onclick="benchmark()">Developer benchmark</button></div>
 <input id="camera" type="file" accept="image/*" capture="environment" hidden><input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Take a clear, straight-on photo or choose an existing image. The app will run a quality pre-check before AI analysis.</div>
+<div id="status" class="status">Take a clear, straight-on photo or choose an image for quality checking. For real AI analysis in GitHub-only mode, upload that image into the repository's uploads folder.</div>
 <div id="preview" class="preview">Sketch preview</div>
 <div id="preflight" class="scanGrid hidden">
   <div class="scanKpi"><span class="note">Resolution</span><b id="qResolution">—</b></div>
@@ -37,8 +37,8 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
   <div class="scanKpi"><span class="note">Contrast</span><b id="qContrast">—</b></div>
   <div class="scanKpi"><span class="note">Scan readiness</span><b id="qReady">—</b></div>
 </div>
-<div class="actions"><button class="orange" onclick="runAIScan()">Run AI scan</button><button onclick="analyse()">Use benchmark result</button></div>
-<div id="aiConnection" class="tip"><b>AI backend:</b> the secure two-pass recognition service is included in the repository, but GitHub Pages cannot execute server code. Deploy the API folder on your company/serverless host and set the endpoint once.</div></section>
+<div class="actions"><button class="orange" onclick="loadGitHubResult()">Load latest GitHub AI result</button><button onclick="analyse()">Use benchmark result</button><a class="blue" style="display:flex;align-items:center;justify-content:center;text-decoration:none;border-radius:9px;padding:10px;font-weight:700" href="https://github.com/brumvin/Fire-zone-plan/tree/main/uploads" target="_blank" rel="noopener">Upload photo in GitHub</a></div>
+<div id="aiConnection" class="tip"><b>GitHub-only mode:</b> upload the photo into the repo's <code>uploads</code> folder. GitHub Actions analyses it, saves <code>results/latest.json</code>, then this page loads that result. No external hosting is needed.</div></section>
 <section id="ai" class="card hidden"><h2>3. AI recognition proposal</h2><div class="tip"><b>Recognition is now confidence-led.</b> Low-confidence walls, room labels and doors must be checked by the engineer before approval. Nothing AI creates is locked.</div><div id="aiResults"></div><button class="blue" onclick="openEditor()">Open interactive plan</button></section>
 
 <section id="editor" class="card hidden"><h2>4. Interactive plan</h2><div class="compare"><div class="pane"><h4>Original sketch</h4><div id="original" class="preview"></div></div>
@@ -81,10 +81,8 @@ async function preflightImage(src){let img=new Image();img.onload=()=>{let max=9
 let norm=document.createElement('canvas');norm.width=1520;norm.height=1000;let nx=norm.getContext('2d');nx.fillStyle='#fff';nx.fillRect(0,0,1520,1000);let ns=Math.min(1520/img.width,1000/img.height),nw=img.width*ns,nh=img.height*ns;nx.drawImage(img,(1520-nw)/2,(1000-nh)/2,nw,nh);scanSource=norm.toDataURL('image/jpeg',.92);
 status.textContent=ready==='Ready'?'Image quality looks suitable for AI scanning.':'Image loaded, but a straighter/brighter photo may improve recognition.'};img.src=src}
 camera.onchange=e=>file(e.target.files[0]);picker.onchange=e=>file(e.target.files[0]);
-const AI_API_URL=window.FIRE_PLAN_AI_ENDPOINT||''; 
-function benchmark(){test001=true;$('status').textContent='Developer benchmark selected.'}
-async function runAIScan(){if(!source){status.textContent='Upload or take a photo first.';return}if(!AI_API_URL){status.textContent='Live AI scanning needs the secure backend endpoint. The front-end pipeline is ready, but GitHub Pages cannot safely hold an API key.';aiConnection.innerHTML='<b>AI backend required:</b> deploy the included serverless endpoint, set its OPENAI_API_KEY secret, then point AI_API_URL at that endpoint.';return}status.textContent='AI scan in progress…';try{let res=await fetch(AI_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:scanSource||source,canvas:{width:760,height:500},mode:'floor_plan_scan_v1'})});if(!res.ok)throw new Error('HTTP '+res.status);let data=await res.json();applyAIResult(data);status.textContent='AI scan complete. Review highlighted low-confidence items.'}catch(e){status.textContent='AI scan failed: '+e.message}}
-function applyAIResult(data){if(!data||!Array.isArray(data.rooms))throw new Error('Invalid AI response');rooms=data.rooms.map(r=>{let p=(r.polygon||r.p||[]).map(q=>[+q[0],+q[1]]);let c=centre({p});return{name:r.name||'Unlabelled area',p,z:+r.zone||1,c:Math.round((r.confidence??.7)*100),s:(r.confidence??.7)>=.9?'pending':'pending',shape:r.shape||'free',lx:c[0],ly:c[1]}});objects=(data.doors||[]).map(d=>({t:d.type==='double'?'door2':'door1',x:+d.x,y:+d.y,a:+d.angle||0,s:'review',confidence:d.confidence??.7}));(data.markers||[]).forEach(m=>objects.push({t:m.type,x:+m.x,y:+m.y,a:0,s:'review'}));ai.classList.remove('hidden');renderAI();openEditor()}
+async function loadGitHubResult(){status.textContent='Checking latest GitHub AI result…';try{let res=await fetch('results/latest.json?ts='+Date.now(),{cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);let data=await res.json();if(data.status==='waiting'){status.textContent=data.message||'No AI result yet.';return}applyAIResult(data);status.textContent='Latest GitHub AI result loaded. Review all rooms, doors and warnings before approval.'}catch(e){status.textContent='Could not load the GitHub AI result: '+e.message}}
+function applyAIResult(data){if(!data||!Array.isArray(data.rooms))throw new Error('Invalid AI response');rooms=data.rooms.map(r=>{let p=(r.polygon||r.p||[]).map(q=>[Math.max(0,Math.min(760,+q[0])),Math.max(0,Math.min(500,+q[1]))]);if(p.length<4)return null;let c=centre({p});return{name:r.name||'Unlabelled area',p,z:1,c:Math.round((r.confidence??.7)*100),s:'pending',shape:r.shape||'free',lx:c[0],ly:c[1]}}).filter(Boolean);objects=(data.doors||[]).map(d=>({t:d.type==='double'?'door2':'door1',x:Math.max(0,Math.min(760,+d.x)),y:Math.max(0,Math.min(500,+d.y)),a:+d.angle||0,s:'review',confidence:d.confidence??.7}));(data.markers||[]).forEach(m=>objects.push({t:m.type,x:+m.x,y:+m.y,a:0,s:'review'}));ai.classList.remove('hidden');renderAI();if(data.warnings?.length)aiResults.insertAdjacentHTML('afterbegin','<div class="tip"><b>AI warnings:</b><br>'+data.warnings.map(esc).join('<br>')+'</div>');openEditor()}
 function analyse(){if(!source){$('status').textContent='Upload the drawing first.';return}if(!test001){$('status').textContent='Select Developer benchmark to load the fixed test result, or connect the secure AI backend for real scanning.';return}rooms=tc();rooms.forEach(r=>{let c=centre(r);r.lx=c[0];r.ly=c[1]});objects=tcDoors();$('ai').classList.remove('hidden');renderAI();$('ai').scrollIntoView({behavior:'smooth'})}
 function badge(r){return r.s==='verified'?'<span class="pill verified">ENGINEER VERIFIED</span>':r.s==='edited'?'<span class="pill edited">ENGINEER EDITED</span>':'<span class="pill">AI '+r.c+'%</span>'}
 function renderAI(){$('aiResults').innerHTML=rooms.map((r,i)=>'<div class="row"><b>'+esc(r.name)+'</b><span>'+r.shape+'</span>'+badge(r)+'<button onclick="openEditor('+i+')">Review</button></div>').join('')+'<div class="tip">'+objects.filter(o=>o.t.startsWith("door")).length+' door/opening suggestions require engineer confirmation. Low-confidence detections should be corrected or deleted rather than accepted automatically.</div>'}
