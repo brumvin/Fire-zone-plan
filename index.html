@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V15</title>
+<title>Fire Zone Plan Builder V16</title>
 <style>
 :root{--n:#102f3f;--o:#ed6a32;--g:#19704d;--b:#1769aa;--bg:#edf2f4;--r:#c83d3d;--amber:#b87800}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Arial;background:var(--bg);color:#18262d}
@@ -22,24 +22,29 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
 .output{border:3px solid var(--n);padding:12px;margin-top:10px}.zoneLegend{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0}.zoneKey{display:flex;align-items:center;gap:6px;border:1px solid #ccd5d9;border-radius:8px;padding:5px 8px;background:#fff}.zoneSwatch{width:24px;height:18px;border:1px solid #50616a;border-radius:4px;display:inline-block}
 @media(max-width:850px){.grid,.actions,.tools,.compare,.editorGrid{grid-template-columns:1fr}.workspace{height:480px}.editDock{position:static}.row{grid-template-columns:1.25fr .6fr 1fr 36px}.ctx{grid-template-columns:1fr 1fr}header{padding-top:calc(12px + env(safe-area-inset-top))}}
 </style></head><body>
-<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V15 · benchmark rebuilt from original sketch</div></header>
+<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V16 · direct benchmark mode · no GitHub upload required</div></header>
 <main>
 <section class="card"><h2>1. Site details</h2><div class="grid"><input id="customer" placeholder="Customer"><input id="site" placeholder="Site / building"><input id="floor" placeholder="Floor"><input id="engineer" placeholder="Engineer"><input id="job" placeholder="Joblogic job no."><input id="date" type="date"></div></section>
 
-<section class="card"><h2>2. Scan or upload drawing</h2>
-<div class="actions"><button onclick="camera.click()">Take photo</button><button onclick="picker.click()">Choose photo</button><button class="navy" onclick="benchmark()">Developer benchmark</button></div>
-<input id="camera" type="file" accept="image/*" capture="environment" hidden><input id="picker" type="file" accept="image/*" hidden>
-<div id="status" class="status">Take a clear, straight-on photo or choose an image for quality checking. For real AI analysis in GitHub-only mode, upload that image into the repository's uploads folder.</div>
-<div id="preview" class="preview">Sketch preview</div>
+<section class="card"><h2>2. Drawing source</h2>
+<div class="actions">
+  <button onclick="camera.click()">Take photo</button>
+  <button onclick="picker.click()">Choose photo</button>
+  <button class="navy" onclick="loadBenchmark()">Open rebuilt benchmark</button>
+</div>
+<input id="camera" type="file" accept="image/*" capture="environment" hidden>
+<input id="picker" type="file" accept="image/*" hidden>
+<div id="status" class="status">For the current test drawing, press <b>Open rebuilt benchmark</b>. Uploading a photo is optional and is only used as a reference image in this no-API version.</div>
+<div id="preview" class="preview">Optional sketch preview</div>
 <div id="preflight" class="scanGrid hidden">
   <div class="scanKpi"><span class="note">Resolution</span><b id="qResolution">—</b></div>
   <div class="scanKpi"><span class="note">Brightness</span><b id="qBrightness">—</b></div>
   <div class="scanKpi"><span class="note">Contrast</span><b id="qContrast">—</b></div>
   <div class="scanKpi"><span class="note">Scan readiness</span><b id="qReady">—</b></div>
 </div>
-<div class="actions"><button class="orange" onclick="loadGitHubResult()">Load latest GitHub AI result</button><button onclick="analyse()">Use benchmark result</button><a class="blue" style="display:flex;align-items:center;justify-content:center;text-decoration:none;border-radius:9px;padding:10px;font-weight:700" href="https://github.com/brumvin/Fire-zone-plan/tree/main/uploads" target="_blank" rel="noopener">Upload photo in GitHub</a></div>
-<div id="aiConnection" class="tip"><b>Current mode:</b> GitHub can host the editor, but live AI image recognition still needs access to an AI model. Without an API/model credential, use the manual benchmark/editor while we refine the drawing geometry.</div></section>
-<section id="ai" class="card hidden"><h2>3. AI recognition proposal</h2><div class="tip"><b>Recognition is now confidence-led.</b> Low-confidence walls, room labels and doors must be checked by the engineer before approval. Nothing AI creates is locked.</div><div id="aiResults"></div><button class="blue" onclick="openEditor()">Open interactive plan</button></section>
+<div id="aiConnection" class="tip"><b>No GitHub upload needed.</b> This version opens the rebuilt benchmark directly in the editor. Live AI scanning is disabled until a model connection is available.</div>
+</section>
+<section id="ai" class="card hidden"><h2>3. Rebuilt recognition proposal</h2><div class="tip"><b>Benchmark mode.</b> This is the hand-rebuilt interpretation of the supplied sketch. Everything remains editable by the engineer.</div><div id="aiResults"></div><button class="blue" onclick="openEditor()">Open interactive plan</button></section>
 
 <section id="editor" class="card hidden"><h2>4. Interactive plan</h2><div class="compare"><div class="pane"><h4>Original sketch</h4><div id="original" class="preview"></div></div>
 <div class="pane"><h4>Created plan</h4><div class="tools"><button onclick="zoomBy(1.25)">＋ Zoom</button><button onclick="zoomBy(.8)">－ Zoom</button><button onclick="fit()">Fit</button><button onclick="setMode('pan')">Pan</button><button onclick="setMode('select')">Select / move</button><button onclick="setMode('wall')">Edit walls</button><button onclick="setMode('label')">Move labels</button></div>
@@ -95,10 +100,10 @@ status.textContent=ready==='Ready'?'Image quality looks suitable for AI scanning
 camera.onchange=e=>file(e.target.files[0]);picker.onchange=e=>file(e.target.files[0]);
 async function loadGitHubResult(){status.textContent='Checking latest GitHub AI result…';try{let res=await fetch('results/latest.json?ts='+Date.now(),{cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);let data=await res.json();if(data.status==='waiting'){status.textContent=data.message||'No AI result yet.';return}applyAIResult(data);status.textContent='Latest GitHub AI result loaded. Review all rooms, doors and warnings before approval.'}catch(e){status.textContent='Could not load the GitHub AI result: '+e.message}}
 function applyAIResult(data){if(!data||!Array.isArray(data.rooms))throw new Error('Invalid AI response');rooms=data.rooms.map(r=>{let p=(r.polygon||r.p||[]).map(q=>[Math.max(0,Math.min(760,+q[0])),Math.max(0,Math.min(500,+q[1]))]);if(p.length<4)return null;let c=centre({p});return{name:r.name||'Unlabelled area',p,z:1,c:Math.round((r.confidence??.7)*100),s:'pending',shape:r.shape||'free',lx:c[0],ly:c[1]}}).filter(Boolean);objects=(data.doors||[]).map(d=>({t:d.type==='double'?'door2':'door1',x:Math.max(0,Math.min(760,+d.x)),y:Math.max(0,Math.min(500,+d.y)),a:+d.angle||0,s:'review',confidence:d.confidence??.7}));(data.markers||[]).forEach(m=>objects.push({t:m.type,x:+m.x,y:+m.y,a:0,s:'review'}));ai.classList.remove('hidden');renderAI();if(data.warnings?.length)aiResults.insertAdjacentHTML('afterbegin','<div class="tip"><b>AI warnings:</b><br>'+data.warnings.map(esc).join('<br>')+'</div>');openEditor()}
-function analyse(){if(!source){$('status').textContent='Upload the drawing first.';return}if(!test001){$('status').textContent='Select Developer benchmark to load the fixed test result, or connect the secure AI backend for real scanning.';return}rooms=tc();rooms.forEach(r=>{let c=centre(r);r.lx=c[0];r.ly=c[1]});objects=tcDoors();$('ai').classList.remove('hidden');renderAI();$('ai').scrollIntoView({behavior:'smooth'})}
+function analyse(){loadBenchmark()}
 function badge(r){return r.s==='verified'?'<span class="pill verified">ENGINEER VERIFIED</span>':r.s==='edited'?'<span class="pill edited">ENGINEER EDITED</span>':'<span class="pill">AI '+r.c+'%</span>'}
 function renderAI(){$('aiResults').innerHTML=rooms.map((r,i)=>'<div class="row"><b>'+esc(r.name)+'</b><span>'+r.shape+'</span>'+badge(r)+'<button onclick="openEditor('+i+')">Review</button></div>').join('')+'<div class="tip">'+objects.filter(o=>o.t.startsWith("door")).length+' door/opening suggestions require engineer confirmation. Low-confidence detections should be corrected or deleted rather than accepted automatically.</div>'}
-function openEditor(i){$('editor').classList.remove('hidden');$('original').innerHTML='<img src="'+source+'">';if(Number.isInteger(i))selected={k:'r',i};render();$('editor').scrollIntoView({behavior:'smooth'})}
+function openEditor(i){$('editor').classList.remove('hidden');$('original').innerHTML=source?'<img src="'+source+'">':'<div class="status">No local reference photo loaded. The rebuilt benchmark is based on the original sketch supplied in chat.</div>';if(Number.isInteger(i))selected={k:'r',i};render();$('editor').scrollIntoView({behavior:'smooth'})}
 const zoneColours={1:'#F4B4B4',2:'#B8D9FF',3:'#BDE5C5',4:'#FFE699',5:'#F6C28B',6:'#D8C2F0',7:'#BCE8E6',8:'#E2C1A6',9:'#D8DDE3'};function col(z){return zoneColours[z]||'#F1F3F4'}
 function centre(r){return[r.p.reduce((a,q)=>a+q[0],0)/r.p.length,r.p.reduce((a,q)=>a+q[1],0)/r.p.length]}
 function bounds(r){let xs=r.p.map(q=>q[0]),ys=r.p.map(q=>q[1]);return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]}
