@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V14</title>
+<title>Fire Zone Plan Builder V15</title>
 <style>
 :root{--n:#102f3f;--o:#ed6a32;--g:#19704d;--b:#1769aa;--bg:#edf2f4;--r:#c83d3d;--amber:#b87800}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Arial;background:var(--bg);color:#18262d}
@@ -22,7 +22,7 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
 .output{border:3px solid var(--n);padding:12px;margin-top:10px}.zoneLegend{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0}.zoneKey{display:flex;align-items:center;gap:6px;border:1px solid #ccd5d9;border-radius:8px;padding:5px 8px;background:#fff}.zoneSwatch{width:24px;height:18px;border:1px solid #50616a;border-radius:4px;display:inline-block}
 @media(max-width:850px){.grid,.actions,.tools,.compare,.editorGrid{grid-template-columns:1fr}.workspace{height:480px}.editDock{position:static}.row{grid-template-columns:1.25fr .6fr 1fr 36px}.ctx{grid-template-columns:1fr 1fr}header{padding-top:calc(12px + env(safe-area-inset-top))}}
 </style></head><body>
-<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V14 · corrected zone palette · manual-first editor</div></header>
+<header><b style="font-size:20px">Fire Alarm Zone Plan Builder</b><div class="note" style="color:#dce7eb">V15 · benchmark rebuilt from original sketch</div></header>
 <main>
 <section class="card"><h2>1. Site details</h2><div class="grid"><input id="customer" placeholder="Customer"><input id="site" placeholder="Site / building"><input id="floor" placeholder="Floor"><input id="engineer" placeholder="Engineer"><input id="job" placeholder="Joblogic job no."><input id="date" type="date"></div></section>
 
@@ -49,7 +49,7 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
 <div id="doorTools" class="hidden"><div class="ctx"><button onclick="rotateDoor()">Rotate 90°</button><button onclick="flipDoor()">Flip swing</button><button onclick="changeDoorType()">Single ↔ Double</button><button onclick="snapSelectedDoor()">Snap to wall</button><button onclick="verifyDoor()">✓ Confirm door</button><button class="danger" onclick="removeSelected()">Delete door</button></div></div>
 <div id="markerTools" class="hidden"><div class="ctx"><button class="danger" onclick="removeSelected()">Delete marker</button></div></div><div id="labelTools" class="hidden"><label class="note">Room name</label><input id="labelText" oninput="renameSelectedLabel(this.value)"><div class="ctx"><button onclick="nudgeLabel(-10,0)">← Left</button><button onclick="nudgeLabel(10,0)">Right →</button><button onclick="nudgeLabel(0,-10)">↑ Up</button><button onclick="nudgeLabel(0,10)">Down ↓</button><button onclick="centreLabel()">Centre label</button><button onclick="resetLabel()">Reset label</button></div></div><div id="wallTools" class="hidden"><div class="tip">Moving a shared wall updates adjoining room geometry together. Doors re-snap to the edited walls.</div><div class="ctx"><button onclick="alignWall('h')">Make horizontal</button><button onclick="alignWall('v')">Make vertical</button><button onclick="splitWall()">Split wall</button><button onclick="snapWallGrid()">Snap to grid</button></div></div>
 <hr><div class="ctx"><button onclick="arm('door1')">+ Single door</button><button onclick="arm('door2')">+ Double door</button><button onclick="arm('facp')">+ FACP</button><button onclick="arm('mcp')">+ MCP</button><button onclick="arm('here')">+ You Are Here</button><button onclick="addRoom()">+ Area</button><button onclick="undo()">Undo</button></div>
-</div></div><div id="objectStatus" class="status">Direct editing: drag rooms, doors and labels. The original sketch stays separate so the plan remains clean.</div></div></div>
+</div></div><div id="objectStatus" class="status">Direct editing: drag rooms, doors and labels. Benchmark geometry has been rebuilt from the supplied sketch.</div></div></div>
 <h3>Areas</h3><div id="roomList"></div><button class="orange" onclick="zones.classList.remove('hidden');zones.scrollIntoView({behavior:'smooth'})">Continue to zoning</button></section>
 
 <section id="zones" class="card hidden"><h2>5. Zones</h2><div class="tip">Zone colours are for clear visual differentiation. The zone number remains the controlling identification.</div><div id="zoneLegend" class="zoneLegend"></div><div id="zoneList"></div><button class="orange" onclick="verifyStage()">Continue to approval</button></section>
@@ -59,21 +59,33 @@ input,select,button{font:inherit;padding:10px;border:1px solid #c8d2d7;border-ra
 const $=x=>document.getElementById(x);let source='',scanSource='',test001=false,rooms=[],objects=[],selected=null,armed='',mode='select',drag=null,scale=1,px=0,py=0,hist=[];
 $('date').value=new Date().toISOString().slice(0,10);
 const tc=()=>[
-{name:'Office 1',p:[[35,45],[185,45],[185,185],[35,185]],z:1,c:97,s:'pending',shape:'rect'},
-{name:'Office 2',p:[[185,45],[365,45],[365,185],[185,185]],z:1,c:96,s:'pending',shape:'rect'},
-{name:'Meeting Room',p:[[365,45],[565,45],[565,185],[365,185]],z:1,c:94,s:'pending',shape:'rect'},
-{name:'Store',p:[[565,45],[720,45],[720,120],[565,120]],z:2,c:91,s:'pending',shape:'rect'},
-{name:'Plant Room',p:[[615,120],[720,120],[720,225],[615,225]],z:2,c:90,s:'pending',shape:'rect'},
-{name:'Corridor',p:[[105,185],[615,185],[615,225],[590,225],[590,265],[105,265]],z:1,c:91,s:'pending',shape:'free'},
-{name:'WC',p:[[35,185],[105,185],[105,300],[35,300]],z:1,c:84,s:'pending',shape:'rect'},
-{name:'Reception',p:[[105,265],[300,265],[300,445],[105,445]],z:1,c:96,s:'pending',shape:'rect'},
-{name:'Warehouse',p:[[300,265],[590,265],[590,445],[300,445]],z:3,c:97,s:'pending',shape:'rect'},
-{name:'Kitchen',p:[[590,225],[720,225],[720,345],[590,345]],z:2,c:95,s:'pending',shape:'rect'},
-{name:'Stairs',p:[[35,300],[105,300],[105,445],[35,445]],z:1,c:92,s:'pending',shape:'rect'}];
+{name:'Office 1',p:[[15,46],[169,36],[169,193],[8,195]],z:1,c:99,s:'pending',shape:'free'},
+{name:'Office 2',p:[[169,36],[368,34],[368,186],[169,193]],z:1,c:99,s:'pending',shape:'free'},
+{name:'Meeting Room',p:[[368,34],[578,14],[578,179],[368,186]],z:1,c:99,s:'pending',shape:'free'},
+{name:'Store',p:[[578,14],[719,0],[732,126],[578,127]],z:2,c:98,s:'pending',shape:'free'},
+{name:'Plant Room',p:[[630,127],[732,126],[737,232],[630,232]],z:2,c:98,s:'pending',shape:'free'},
+{name:'Corridor',p:[[88,194],[169,193],[368,186],[578,179],[578,136],[592,136],[592,127],[630,127],[630,232],[598,232],[598,251],[549,258],[290,261],[88,261]],z:1,c:98,s:'pending',shape:'free'},
+{name:'WC',p:[[8,195],[88,194],[88,301],[6,301]],z:1,c:97,s:'pending',shape:'free'},
+{name:'Reception',p:[[88,261],[290,261],[290,485],[88,498]],z:1,c:99,s:'pending',shape:'free'},
+{name:'Warehouse',p:[[290,261],[549,258],[598,251],[598,358],[750,358],[757,479],[290,485]],z:3,c:99,s:'pending',shape:'free'},
+{name:'Kitchen',p:[[598,232],[737,232],[750,358],[598,358]],z:2,c:99,s:'pending',shape:'free'},
+{name:'Stairs',p:[[6,301],[88,301],[88,498],[1,499]],z:1,c:98,s:'pending',shape:'free'}]
 const tcDoors=()=>[
-{t:'door1',x:150,y:185,a:0,s:'review'},{t:'door1',x:270,y:185,a:0,s:'review'},{t:'door1',x:460,y:185,a:0,s:'review'},
-{t:'door1',x:105,y:255,a:90,s:'review'},{t:'door1',x:275,y:265,a:0,s:'review'},{t:'door1',x:520,y:265,a:0,s:'review'},
-{t:'door1',x:615,y:170,a:90,s:'review'},{t:'door1',x:590,y:305,a:90,s:'review'},{t:'door2',x:205,y:445,a:0,s:'review'}];
+{t:'door1',x:145,y:193,a:0,s:'review'},
+{t:'door1',x:196,y:191,a:0,s:'review'},
+{t:'door1',x:345,y:187,a:0,s:'review'},
+{t:'door1',x:552,y:180,a:0,s:'review'},
+{t:'door1',x:592,y:127,a:90,s:'review'},
+{t:'door1',x:630,y:191,a:90,s:'review'},
+{t:'door1',x:88,y:292,a:90,s:'review'},
+{t:'door1',x:266,y:261,a:0,s:'review'},
+{t:'door1',x:570,y:255,a:0,s:'review'},
+{t:'door1',x:598,y:268,a:90,s:'review'},
+{t:'door2',x:217,y:486,a:0,s:'review'},
+{t:'door1',x:350,y:34,a:0,s:'review'},
+{t:'annotation',x:350,y:10,label:'FIRE EXIT',s:'verified'},
+{t:'annotation',x:217,y:498,label:'MAIN ENTRANCE',s:'verified'}
+]
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function file(f){if(!f)return;let r=new FileReader();r.onload=()=>{source=r.result;$('preview').innerHTML='<img src="'+source+'">';$('status').textContent='Image loaded. Running quality pre-check…';preflightImage(source)};r.readAsDataURL(f)}
@@ -97,9 +109,9 @@ function pointOnSegment(p,a,b,t=3){let dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy;i
 function relatedWallVertices(a,b){let out=[];rooms.forEach((r,ri)=>r.p.forEach((p,pi)=>{if(pointOnSegment(p,a,b,3))out.push({ri,pi})}));return out}
 function reSnapDoors(){objects.forEach(o=>{if(!o.t.startsWith('door'))return;let w=nearestWall(o.x,o.y);if(w&&w.d<90){o.x=Math.round(w.x);o.y=Math.round(w.y);o.a=w.a;o.wall=w.ri}})}
 function door(o,i){let dbl=o.t==='door2',w=dbl?38:27,sel=selected?.k==='o'&&selected.i===i,rev=o.s!=='verified';let swing=dbl?'<path d="M-38 0A38 38 0 0 1 0 38M38 0A38 38 0 0 0 0 38" fill="none" stroke="#1769aa" stroke-width="3"/>':'<path d="M-27 0A54 54 0 0 1 27 54" fill="none" stroke="#1769aa" stroke-width="3"/>';return '<g data-o="'+i+'" class="door '+(sel?'selected ':'')+(rev?'review':'')+'" transform="translate('+o.x+' '+o.y+') rotate('+(o.a||0)+') scale(1 '+(o.f?-1:1)+')"><line class="doorHit" x1="-50" y1="0" x2="50" y2="0"/><line class="doorCore" x1="-'+w+'" y1="0" x2="'+w+'" y2="0" stroke="#102f3f" stroke-width="5"/>'+swing+'</g>'}
-function obj(o,i){if(o.t.startsWith('door'))return door(o,i);let l=o.t==='facp'?'FACP':o.t==='mcp'?'MCP':'YOU ARE HERE',sel=selected?.k==='o'&&selected.i===i;return '<g data-o="'+i+'" class="marker '+(sel?'selected':'')+'" transform="translate('+o.x+' '+o.y+')"><circle class="markerHit" r="20" fill="'+(o.t==='here'?'#1769aa':'#c83d3d')+'"/><text pointer-events="none" x="25" y="5" font-size="13" font-weight="700">'+l+'</text></g>'}
+function obj(o,i){if(o.t.startsWith('door'))return door(o,i);let sel=selected?.k==='o'&&selected.i===i;if(o.t==='annotation')return '<g data-o="'+i+'" class="marker '+(sel?'selected':'')+'" transform="translate('+o.x+' '+o.y+')"><circle class="markerHit" r="18" fill="transparent"/><text pointer-events="none" text-anchor="middle" y="-4" font-size="13" font-weight="800">'+esc(o.label||'')+'</text><path d="M0 0v20m0 0l-7-8m7 8l7-8" stroke="#102f3f" stroke-width="2" fill="none"/></g>';let l=o.t==='facp'?'FACP':o.t==='mcp'?'MCP':'YOU ARE HERE';return '<g data-o="'+i+'" class="marker '+(sel?'selected':'')+'" transform="translate('+o.x+' '+o.y+')"><circle class="markerHit" r="20" fill="'+(o.t==='here'?'#1769aa':'#c83d3d')+'"/><text pointer-events="none" x="25" y="5" font-size="13" font-weight="700">'+l+'</text></g>'}
 function render(){let s='<rect width="760" height="500" fill="white"/><g transform="translate('+px+' '+py+') scale('+scale+')">';rooms.forEach((r,i)=>{let c=centre(r),sel=selected?.k==='r'&&selected.i===i,lx=r.lx??c[0],ly=r.ly??c[1];r.lx=lx;r.ly=ly;s+='<g data-r="'+i+'" class="room '+(sel?'selected':'')+'"><polygon points="'+r.p.map(q=>q.join(',')).join(' ')+'" fill="'+col(r.z)+'" fill-opacity=".72" stroke="#263b45" stroke-width="4"/>'+(sel?r.p.map((q,j)=>'<circle data-n="'+j+'" data-r="'+i+'" class="node" cx="'+q[0]+'" cy="'+q[1]+'" r="10"/>').join(''):'')+'</g><g data-label="'+i+'" class="labelHandle '+(selected?.k==='label'&&selected.i===i?'selected':'')+'" transform="translate('+lx+' '+ly+')"><rect class="labelHit" x="-70" y="-22" width="140" height="44"/><text pointer-events="none" text-anchor="middle" font-size="16" font-weight="700">'+esc(r.name)+'</text></g>'});if(mode==='wall'){wallSegments().forEach(w=>{let sel=selected?.k==='w'&&selected.ri===w.ri&&selected.si===w.si;s+='<line class="wallGuide '+(sel?'selected':'')+'" x1="'+w.a[0]+'" y1="'+w.a[1]+'" x2="'+w.b[0]+'" y2="'+w.b[1]+'"/><line data-wri="'+w.ri+'" data-wsi="'+w.si+'" class="wallHit" x1="'+w.a[0]+'" y1="'+w.a[1]+'" x2="'+w.b[0]+'" y2="'+w.b[1]+'"/>'})}objects.forEach((o,i)=>s+=obj(o,i));$('plan').innerHTML=s+'</g>';lists();context();$('zoomStatus').textContent=Math.round(scale*100)+'% · pinch/zoom/pan'}
-function context(){roomTools.classList.add('hidden');doorTools.classList.add('hidden');markerTools.classList.add('hidden');wallTools.classList.add('hidden');labelTools.classList.add('hidden');if(!selected){selectionStatus.textContent='Tap a room, door or marker.';return}if(selected.k==='r'){let r=rooms[selected.i];selectionStatus.textContent='Room: '+r.name;shapeSelect.value=r.shape||'free';roomTools.classList.remove('hidden')}else if(selected.k==='w'){selectionStatus.textContent='Wall selected · drag it to move adjoining boundaries';wallTools.classList.remove('hidden')}else if(selected.k==='label'){let r=rooms[selected.i];selectionStatus.textContent='Room label: '+r.name;labelText.value=r.name;labelTools.classList.remove('hidden')}else{let o=objects[selected.i];if(o.t.startsWith('door')){selectionStatus.textContent=(o.t==='door2'?'Double':'Single')+' door · '+(o.s==='verified'?'ENGINEER VERIFIED':'AI SUGGESTION — REVIEW');doorTools.classList.remove('hidden')}else{selectionStatus.textContent=o.t.toUpperCase();markerTools.classList.remove('hidden')}}}
+function context(){roomTools.classList.add('hidden');doorTools.classList.add('hidden');markerTools.classList.add('hidden');wallTools.classList.add('hidden');labelTools.classList.add('hidden');if(!selected){selectionStatus.textContent='Tap a room, door or marker.';return}if(selected.k==='r'){let r=rooms[selected.i];selectionStatus.textContent='Room: '+r.name;shapeSelect.value=r.shape||'free';roomTools.classList.remove('hidden')}else if(selected.k==='w'){selectionStatus.textContent='Wall selected · drag it to move adjoining boundaries';wallTools.classList.remove('hidden')}else if(selected.k==='label'){let r=rooms[selected.i];selectionStatus.textContent='Room label: '+r.name;labelText.value=r.name;labelTools.classList.remove('hidden')}else{let o=objects[selected.i];if(o.t.startsWith('door')){selectionStatus.textContent=(o.t==='door2'?'Double':'Single')+' door · '+(o.s==='verified'?'ENGINEER VERIFIED':'AI SUGGESTION — REVIEW');doorTools.classList.remove('hidden')}else{selectionStatus.textContent=o.t==='annotation'?(o.label||'Annotation'):o.t.toUpperCase();markerTools.classList.remove('hidden')}}}
 function lists(){let a='',z='';zoneLegend.innerHTML=[1,2,3,4,5,6,7,8,9].map(n=>'<span class="zoneKey"><span class="zoneSwatch" style="background:'+col(n)+'"></span><b>Zone '+n+'</b></span>').join('');rooms.forEach((r,i)=>{a+='<div class="row"><input value="'+esc(r.name)+'" onchange="save();rooms['+i+'].name=this.value;rooms['+i+'].s=\'edited\';render()"><select onchange="save();rooms['+i+'].z=+this.value;render()">'+[1,2,3,4,5,6,7,8,9].map(n=>'<option '+(n===r.z?'selected':'')+'>'+n+'</option>').join('')+'</select>'+badge(r)+'<button onclick="save();rooms.splice('+i+',1);selected=null;render()">×</button></div>';z+='<div class="row"><b>'+esc(r.name)+'</b><select onchange="rooms['+i+'].z=+this.value;render()">'+[1,2,3,4,5,6,7,8,9].map(n=>'<option '+(n===r.z?'selected':'')+'>'+n+'</option>').join('')+'</select>'+badge(r)+'<span></span></div>'});roomList.innerHTML=a;zoneList.innerHTML=z}
 function save(){hist.push(JSON.stringify({rooms,objects}));if(hist.length>30)hist.shift()}function undo(){if(!hist.length)return;let d=JSON.parse(hist.pop());rooms=d.rooms;objects=d.objects;selected=null;render()}
 function zoomBy(f,cx=380,cy=250){let ns=Math.max(.5,Math.min(4,scale*f));px=cx-(cx-px)*(ns/scale);py=cy-(cy-py)*(ns/scale);scale=ns;render()}function fit(){scale=1;px=py=0;render()}function setMode(m){mode=m;selected=null;objectStatus.textContent=m==='pan'?'Pan mode: drag the drawing.':m==='wall'?'Wall mode: tap/drag a wall. Shared boundaries move together.':m==='label'?'Label mode: drag room names directly on the plan.':'Select mode: drag rooms, doors and markers.';render()}
