@@ -277,10 +277,17 @@
     const idx=ids[0],r=roomsV25[idx];
     if(r.manualRect){
       roomSave();const q=r.manualRect;
+      let r1,r2;
       if(dir==='V'){
-        const w=q.w/2;r.manualRect={x:q.x,y:q.y,w,y:q.h}; // fixed below
+        const w=q.w/2;
+        r1={name:r.name+' A',cells:[],manual:true,manualRect:{x:q.x,y:q.y,w:w,h:q.h},lx:q.x+w/2,ly:q.y+q.h/2};
+        r2={name:r.name+' B',cells:[],manual:true,manualRect:{x:q.x+w,y:q.y,w:q.w-w,h:q.h},lx:q.x+w+(q.w-w)/2,ly:q.y+q.h/2};
+      }else{
+        const hh=q.h/2;
+        r1={name:r.name+' A',cells:[],manual:true,manualRect:{x:q.x,y:q.y,w:q.w,h:hh},lx:q.x+q.w/2,ly:q.y+hh/2};
+        r2={name:r.name+' B',cells:[],manual:true,manualRect:{x:q.x,y:q.y+hh,w:q.w,h:q.h-hh},lx:q.x+q.w/2,ly:q.y+hh+(q.h-hh)/2};
       }
-      return;
+      roomsV25.splice(idx,1,r1,r2);roomSelected.clear();renderRooms();return;
     }
     const b=roomBounds(r),mid=dir==='V'?(b[0]+b[2])/2:(b[1]+b[3])/2;
     const a=r.cells.filter(c=>dir==='V'?((c.x1+c.x2)/2<mid):((c.y1+c.y2)/2<mid));
