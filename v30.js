@@ -7,8 +7,12 @@
   const style=document.createElement('style');
   style.textContent=`
     .roomStage{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:12px}
-    .roomDock{border:2px solid #dfe7ea;border-radius:12px;padding:10px;background:#fbfcfc;align-self:start}
-    .roomRow{display:grid;grid-template-columns:34px 1fr 82px;gap:7px;align-items:center;margin:6px 0}
+    .roomDock{border:2px solid #dfe7ea;border-radius:12px;padding:10px;background:#fbfcfc;align-self:start;overflow:hidden}
+    .roomDock .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .roomDock .controls button{width:100%;min-width:0;white-space:normal;line-height:1.15}
+    .roomRow{display:grid;grid-template-columns:30px minmax(0,1fr) 76px;gap:7px;align-items:center;margin:6px 0}
+    .roomRow button{width:100%;min-width:0;padding-left:6px;padding-right:6px}
+    .roomRow input[type=text]{min-width:0;width:100%}
     .roomRow input[type=text]{min-width:0}
     .roomCheck{width:22px;height:22px;min-height:auto}
     .roomFill{stroke:none;fill-opacity:.28}.manualRoomFill{stroke:#7b8c94;stroke-width:1.2;fill-opacity:.28}
@@ -16,7 +20,7 @@
     .roomLabel{cursor:move}
     .roomLabel.selected text{fill:#ed6a32}
     .roomHit{fill:transparent;stroke:transparent}
-    @media(max-width:900px){.roomStage{grid-template-columns:1fr}}
+    @media(max-width:900px){.roomStage{grid-template-columns:1fr}.roomDock .controls{grid-template-columns:1fr 1fr}}
   `;
   document.head.appendChild(style);
 
