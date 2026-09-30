@@ -1,4 +1,4 @@
-// V38 - colour-safe, hard one-page A4/A3 printing.
+// V39 - staircase-aware, colour-safe one-page A4/A3 printing.
 (function(){
   const zoneColours={1:'#f4b4b4',2:'#b8d9ff',3:'#bde5c5',4:'#ffe699',5:'#f6c28b',6:'#d8c2f0',7:'#bce8e6',8:'#e2c1a6',9:'#d8dde3'};
   let model=null;
@@ -99,13 +99,18 @@
     return '<g transform="translate('+d.x+' '+d.y+') rotate('+rot+') scale('+sx+' '+sy+')"><line x1="-'+w+'" y1="0" x2="'+w+'" y2="0" stroke="#102f3f" stroke-width="5"/>'+swing+'</g>';
   }
   function markerSvg(m){
-    m.rot=m.rot||0;m.tx=m.tx??22;m.ty=m.ty??5;
+    m.rot=m.rot||0;m.tx=m.tx??22;m.ty=m.ty??5;m.size=m.size||1;
+    if(m.type==='stairs'){
+      const sc=m.size;let steps='';
+      for(let n=0;n<6;n++){const yy=-24+n*9;steps+='<line x1="-22" y1="'+yy+'" x2="22" y2="'+yy+'" stroke="#102f3f" stroke-width="2"/>'}
+      return '<g transform="translate('+m.x+' '+m.y+') rotate('+m.rot+') scale('+sc+')"><rect x="-24" y="-28" width="48" height="58" fill="white" fill-opacity=".72" stroke="#102f3f" stroke-width="2"/>'+steps+'<path d="M0 22V-18m0 0l-6 8m6-8l6 8" stroke="#1769aa" stroke-width="2.5" fill="none"/></g>';
+    }
     if(m.type==='entrance'||m.type==='exit'){
       const label=m.type==='entrance'?'MAIN ENTRANCE':'FIRE EXIT';
-      return '<g transform="translate('+m.x+' '+m.y+')"><text text-anchor="middle" y="-10" font-size="12" font-weight="800">'+label+'</text><g transform="rotate('+m.rot+')"><path d="M0 0v20m0 0l-6-8m6 8l6-8" stroke="#102f3f" stroke-width="2" fill="none"/></g></g>';
+      return '<g transform="translate('+m.x+' '+m.y+')"><text text-anchor="middle" y="-10" font-size="12" font-weight="800">'+label+'</text><g transform="rotate('+m.rot+') scale('+m.size+')"><path d="M0 0v20m0 0l-6-8m6 8l6-8" stroke="#102f3f" stroke-width="2" fill="none"/></g></g>';
     }
     const label=m.type==='facp'?'FACP':m.type==='mcp'?'MCP':'YOU ARE HERE';
-    return '<g transform="translate('+m.x+' '+m.y+')"><circle r="15" fill="'+(m.type==='here'?'#1769aa':'#c83d3d')+'" stroke="#fff" stroke-width="2"/><text x="'+m.tx+'" y="'+m.ty+'" font-size="12" font-weight="800" style="paint-order:stroke;stroke:#fff;stroke-width:4px">'+label+'</text></g>';
+    return '<g transform="translate('+m.x+' '+m.y+')"><circle r="'+(15*m.size)+'" fill="'+(m.type==='here'?'#1769aa':'#c83d3d')+'" stroke="#fff" stroke-width="2"/><text x="'+m.tx+'" y="'+m.ty+'" font-size="12" font-weight="800" style="paint-order:stroke;stroke:#fff;stroke-width:4px">'+label+'</text></g>';
   }
 
   function planSvg(){
