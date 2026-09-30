@@ -458,10 +458,17 @@
     generateRooms();
   };
 
+  window.fireZoneRoomModel={
+    getRooms:()=>JSON.parse(JSON.stringify(roomsV25)),
+    setRooms:(next)=>{roomsV25=JSON.parse(JSON.stringify(next||[]));roomSelected.clear();renderRooms()},
+    getBounds:(r)=>roomBoundsRaw(r)
+  };
+
   $('approveRoomsV25').onclick=()=>{
     if(!roomsV25.length){$('roomStatus').textContent='No room areas are available to approve.';return}
     $('roomApprovedV25').classList.remove('hidden');
     $('roomApprovedSummary').textContent='Approved room model: '+roomsV25.length+' areas. Room names and label positions are now ready for the door/label stage.';
+    window.dispatchEvent(new CustomEvent('firezone:rooms-approved',{detail:{rooms:window.fireZoneRoomModel.getRooms()}}));
     $('roomApprovedV25').scrollIntoView({behavior:'smooth'});
   };
 })();
