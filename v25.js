@@ -240,10 +240,64 @@
     return rs;
   }
 
-  function roomBounds(r){
+  function consolidateCorridorRooms(rs){
+    const band=roomCorridorBand();
+    if(!band||!rs.length)return rs;
+
+    const candidates=[];
+    rs.forEach((r,i)=>{
+      const b=roomBoundsRaw(r);
+      const overlapY=Math.max(0,Math.min(b[3],band.bottom)-Math.max(b[1],band.top));
+      const roomH=Math.max(1,b[3]-b[1]);
+      const overlapX=Math.max(0,Math.min(b[2],band.right)-Math.max(b[0],band.left));
+      const roomW=Math.max(1,b[2]-b[0]);
+      const mostlyInBand=overlapY/roomH>=0.65;
+      const withinCorridorWidth=overlapX/roomW>=0.5;
+      if(mostlyInBand&&withinCorridorWidth)candidates.push(i);
+    });
+
+    if(candidates.length<2)return rs;
+
+    const allCells=[];
+    let totalArea=0,wx=0,wy=0;
+    for(const i of candidates){
+      const r=rs[i];
+      for(const c of (r.cells||[])){
+        allCells.push(c);
+        totalArea+=c.area;
+        wx+=((c.x1+c.x2)/2)*c.area;
+        wy+=((c.y1+c.y2)/2)*c.area;
+      }
+    }
+    if(!allCells.length)return rs;
+
+    const corridor={
+      name:'Corridor',
+      cells:allCells,
+      lx:wx/totalArea,
+      ly:wy/totalArea,
+      manual:false,
+      isCorridor:true
+    };
+
+    const kept=rs.filter((_,i)=>!candidates.includes(i));
+    kept.push(corridor);
+    kept.sort((a,b)=>a.ly-b.ly||a.lx-b.lx);
+
+    let n=1;
+    for(const r of kept){
+      if(r.isCorridor)r.name='Corridor';
+      else r.name='Area '+(n++);
+    }
+    return kept;
+  }
+
+  function roomBoundsRaw(r){
     if(r.manualRect)return [r.manualRect.x,r.manualRect.y,r.manualRect.x+r.manualRect.w,r.manualRect.y+r.manualRect.h];
     return [Math.min(...r.cells.map(c=>c.x1)),Math.min(...r.cells.map(c=>c.y1)),Math.max(...r.cells.map(c=>c.x2)),Math.max(...r.cells.map(c=>c.y2))];
   }
+
+  function roomBounds(r){ return roomBoundsRaw(r); }
 
   const fills=['#b8d9ff','#bde5c5','#ffe699','#f4b4b4','#d8c2f0','#bce8e6','#f6c28b','#e2c1a6','#d8dde3','#c9e5ff','#d9efc1'];
 
@@ -260,7 +314,18 @@
       }
     });
 
-    walls.forEach(w=>s+='<line class="wallLine" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>');
+    const corridorBand=roomCorridorBand();
+    walls.forEach(w=>{
+      if(corridorBand&&w.axis==='V'&&w.x1>corridorBand.left+12&&w.x1<corridorBand.right-12){
+        const lo=Math.min(w.y1,w.y2),hi=Math.max(w.y1,w.y2);
+        if(lo<corridorBand.top&&hi>corridorBand.bottom){
+          s+='<line class="wallLine" x1="'+w.x1+'" y1="'+lo+'" x2="'+w.x2+'" y2="'+corridorBand.top+'"/>';
+          s+='<line class="wallLine" x1="'+w.x1+'" y1="'+corridorBand.bottom+'" x2="'+w.x2+'" y2="'+hi+'"/>';
+          return;
+        }
+      }
+      s+='<line class="wallLine" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>';
+    });
 
     roomsV25.forEach((r,i)=>{
       const sel=roomSelected.has(i);
@@ -269,7 +334,7 @@
     svg.innerHTML=s;
 
     $('roomListV25').innerHTML=roomsV25.map((r,i)=>'<div class="roomRow"><input class="roomCheck" type="checkbox" '+(roomSelected.has(i)?'checked':'')+' onchange="window.v25ToggleRoom('+i+',this.checked)"><input type="text" value="'+escapeAttr(r.name)+'" onchange="window.v25RenameRoom('+i+',this.value)"><button onclick="window.v25FocusRoom('+i+')">Select</button></div>').join('');
-    $('roomStatus').textContent=roomsV25.length+' room area'+(roomsV25.length===1?'':'s')+' generated. Corridor gaps are preserved during room detection so aligned partitions above/below should not split the corridor.';
+    $('roomStatus').textContent=roomsV25.length+' room area'+(roomsV25.length===1?'':'s')+' generated. Corridor cells are force-merged into one continuous room and crossing partition lines are hidden inside the corridor band.';
   }
 
   function escapeHtml(v){return String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
