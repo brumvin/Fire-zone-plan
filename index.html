@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fire Zone Plan Builder V33</title>
+<title>Fire Zone Plan Builder V35</title>
 <style>
 :root{--navy:#102f3f;--orange:#ed6a32;--green:#19704d;--blue:#1769aa;--bg:#edf2f4;--muted:#687981;--red:#b83232}
 *{box-sizing:border-box}
@@ -24,7 +24,7 @@ button{font-weight:750;cursor:pointer}.navy{background:var(--navy);color:#fff}.o
 .canvasWrap{position:relative;min-height:330px;background:#fff;border:1px solid #d8e0e4;border-radius:10px;overflow:hidden;touch-action:none}
 canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:none}
 .statGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}.stat{border:1px solid #d8e0e4;border-radius:10px;padding:9px;background:#f8fafb}.stat b{display:block;font-size:21px}.small{font-size:12px;color:var(--muted)}
-.editor{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:10px}.dock{border:2px solid #dfe7ea;border-radius:12px;padding:10px;background:#fbfcfc;align-self:start;position:sticky;top:82px}
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:10px}.dock{border:2px solid #dfe7ea;border-radius:12px;padding:10px;background:#fbfcfc;align-self:start;position:sticky;top:82px;overflow:hidden}.dock .controls{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}.dock .controls button{width:100%!important;min-width:0!important;max-width:100%;white-space:normal;line-height:1.15}.dock hr{margin:10px 0}
 .wallLine{stroke:#1b313b;stroke-width:5;stroke-linecap:square}.wallHit{stroke:transparent;stroke-width:30;cursor:grab}.wall.selected .wallLine{stroke:var(--orange);stroke-width:8}.handle{fill:var(--orange);stroke:#fff;stroke-width:3}.axisBadge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:12px;font-weight:800;background:#eaf1f4}
 .rangeRow{display:grid;grid-template-columns:150px 1fr 54px;gap:8px;align-items:center;margin:7px 0}.rangeRow input{min-height:auto;padding:0}
 .progress{height:10px;border-radius:20px;background:#e6ecef;overflow:hidden}.bar{height:100%;width:0;background:var(--blue)}
@@ -33,7 +33,7 @@ canvas,svg{display:block;width:100%;height:auto;max-height:620px;touch-action:no
 </style>
 </head>
 <body>
-<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V33 · rotatable exits · movable marker labels · door handing</div></header>
+<header><b>Fire Alarm Zone Plan Builder</b><div class="sub">V35 · corrected menus · scalable doors · zone assignment & final plan</div></header>
 <main>
 <section class="card">
 <h2>1. Site details</h2>
@@ -604,5 +604,6 @@ $('approveBtn').onclick=()=>{
 <script src="v24.js"></script>
 <script src="v26.js"></script>
 <script src="v30.js"></script>
-<script src="v33.js"></script>
+<script src="v34.js"></script>
+<script src="v35.js"></script>
 </body></html>
