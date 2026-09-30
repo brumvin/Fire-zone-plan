@@ -91,7 +91,34 @@
     };
   }
 
+  function roomCorridorBand(){
+    const env=envelope();
+    if(!env)return null;
+    const hs=walls.filter(w=>w.axis==='H'&&wallLength(w)>=(env.right-env.left)*.45);
+    let best=null;
+    for(let i=0;i<hs.length;i++)for(let j=i+1;j<hs.length;j++){
+      const a=hs[i],b=hs[j],top=Math.min(a.y1,b.y1),bottom=Math.max(a.y1,b.y1),height=bottom-top;
+      if(height<20||height>95)continue;
+      const left=Math.max(Math.min(a.x1,a.x2),Math.min(b.x1,b.x2));
+      const right=Math.min(Math.max(a.x1,a.x2),Math.max(b.x1,b.x2));
+      const overlap=right-left;
+      if(overlap<(env.right-env.left)*.42)continue;
+      const score=overlap-height*.5;
+      if(!best||score>best.score)best={top,bottom,left,right,score};
+    }
+    return best;
+  }
+
+  function gapCrossesCorridor(axis,coord,endA,startB,band){
+    if(!band||axis!=='V')return false;
+    const lo=Math.min(endA,startB),hi=Math.max(endA,startB);
+    const crosses=lo<=band.top+8&&hi>=band.bottom-8;
+    const insideX=coord>band.left+12&&coord<band.right-12;
+    return crosses&&insideX;
+  }
+
   function mergeAxis(lines,axis){
+    const band=roomCorridorBand();
     const groups=[];
     for(const raw of lines.slice().sort((a,b)=>(axis==='H'?a.y1-b.y1:a.x1-b.x1))){
       const c=axis==='H'?raw.y1:raw.x1;
@@ -105,7 +132,8 @@
       let cur=[...spans[0]];
       for(let i=1;i<spans.length;i++){
         const s=spans[i],gap=s[0]-cur[1];
-        if(gap<=ROOM_GAP)cur[1]=Math.max(cur[1],s[1]);
+        const corridorGap=gapCrossesCorridor(axis,g.coord,cur[1],s[0],band);
+        if(gap<=ROOM_GAP&&!corridorGap)cur[1]=Math.max(cur[1],s[1]);
         else{
           out.push(axis==='H'?{x1:cur[0],y1:snap(g.coord),x2:cur[1],y2:snap(g.coord),axis:'H'}:{x1:snap(g.coord),y1:cur[0],x2:snap(g.coord),y2:cur[1],axis:'V'});
           cur=[...s];
@@ -115,7 +143,6 @@
     }
     return out;
   }
-
   function virtualWalls(){
     const env=envelope();
     if(!env)return [];
@@ -242,7 +269,7 @@
     svg.innerHTML=s;
 
     $('roomListV25').innerHTML=roomsV25.map((r,i)=>'<div class="roomRow"><input class="roomCheck" type="checkbox" '+(roomSelected.has(i)?'checked':'')+' onchange="window.v25ToggleRoom('+i+',this.checked)"><input type="text" value="'+escapeAttr(r.name)+'" onchange="window.v25RenameRoom('+i+',this.value)"><button onclick="window.v25FocusRoom('+i+')">Select</button></div>').join('');
-    $('roomStatus').textContent=roomsV25.length+' room area'+(roomsV25.length===1?'':'s')+' generated. Rename labels or make manual corrections before approval.';
+    $('roomStatus').textContent=roomsV25.length+' room area'+(roomsV25.length===1?'':'s')+' generated. Corridor gaps are preserved during room detection so aligned partitions above/below should not split the corridor.';
   }
 
   function escapeHtml(v){return String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
