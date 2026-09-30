@@ -11,7 +11,7 @@
     .roomRow{display:grid;grid-template-columns:34px 1fr 82px;gap:7px;align-items:center;margin:6px 0}
     .roomRow input[type=text]{min-width:0}
     .roomCheck{width:22px;height:22px;min-height:auto}
-    .roomFill{stroke:#7b8c94;stroke-width:1.2;fill-opacity:.28}
+    .roomFill{stroke:none;fill-opacity:.28}.manualRoomFill{stroke:#7b8c94;stroke-width:1.2;fill-opacity:.28}
     .roomLabel text{font-weight:750;font-size:14px;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
     .roomLabel{cursor:move}
     .roomLabel.selected text{fill:#ed6a32}
@@ -198,10 +198,16 @@
     const rs=comps.map(comp=>{
       const cc=comp.ids.map(i=>cells[i]);
       const area=comp.area;
+      const minX=Math.min(...cc.map(c=>c.x1)),maxX=Math.max(...cc.map(c=>c.x2));
+      const minY=Math.min(...cc.map(c=>c.y1)),maxY=Math.max(...cc.map(c=>c.y2));
       const cx=cc.reduce((s,c)=>s+((c.x1+c.x2)/2)*c.area,0)/area;
       const cy=cc.reduce((s,c)=>s+((c.y1+c.y2)/2)*c.area,0)/area;
-      return {name:'',cells:cc,lx:cx,ly:cy,manual:false};
-    }).sort((a,b)=>a.ly-b.ly||a.lx-b.lx);
+      return {name:'',cells:cc,lx:cx,ly:cy,manual:false,width:maxX-minX,height:maxY-minY};
+    })
+    // Thin sliver components come from the cell grid around wall strokes/door gaps,
+    // not from real rooms. Removing them also prevents missing Area numbers.
+    .filter(r=>r.width>=22&&r.height>=22)
+    .sort((a,b)=>a.ly-b.ly||a.lx-b.lx);
 
     rs.forEach((r,i)=>r.name='Area '+(i+1));
     return rs;
@@ -221,7 +227,7 @@
       const fill=fills[i%fills.length],sel=roomSelected.has(i);
       if(r.manualRect){
         const q=r.manualRect;
-        s+='<rect class="roomFill" x="'+q.x+'" y="'+q.y+'" width="'+q.w+'" height="'+q.h+'" fill="'+fill+'" stroke="'+(sel?'#ed6a32':'#7b8c94')+'" stroke-width="'+(sel?4:1.2)+'"/>';
+        s+='<rect class="manualRoomFill" x="'+q.x+'" y="'+q.y+'" width="'+q.w+'" height="'+q.h+'" fill="'+fill+'" stroke="'+(sel?'#ed6a32':'#7b8c94')+'" stroke-width="'+(sel?4:1.2)+'"/>';
       }else{
         for(const c of r.cells)s+='<rect class="roomFill" x="'+c.x1+'" y="'+c.y1+'" width="'+(c.x2-c.x1)+'" height="'+(c.y2-c.y1)+'" fill="'+fill+'"/>';
       }
