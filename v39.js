@@ -254,6 +254,22 @@
   function endDrag(e){if(drag&&drag.id===e.pointerId){try{$('reviewPlan32').releasePointerCapture?.(e.pointerId)}catch{}drag=null}}
   $('reviewPlan32').addEventListener('pointerup',endDrag);$('reviewPlan32').addEventListener('pointercancel',endDrag);
 
+  window.fireZoneDoorEditor={
+    getState:()=>clone({rooms,doors,markers}),
+    setState:(state)=>{
+      state=state||{};
+      rooms=clone(state.rooms||[]);
+      doors=clone(state.doors||[]);
+      markers=clone(state.markers||[]);
+      selected=null;drag=null;armed='';
+      $('doorLabelCard32').classList.remove('hidden');
+      render();
+      $('reviewStatus32').textContent='Saved floor survey restored: '+rooms.length+' rooms, '+doors.length+' doors and '+markers.length+' markers.';
+      window.fireZoneDoorLabelModel=clone({rooms,doors,markers});
+    },
+    start:startStage
+  };
+
   $('approveDoors32').onclick=()=>{
     const unconfirmed=doors.filter(d=>d.status==='review').length;
     if(unconfirmed){$('reviewStatus32').textContent=unconfirmed+' door suggestion'+(unconfirmed===1?' still needs':'s still need')+' confirmation or deletion.';return}
