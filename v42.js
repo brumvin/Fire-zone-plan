@@ -72,7 +72,7 @@
   // Hard-stop page scrolling while the engineer is actually drawing.
   function lockTouchSurface(el){
     if(!el)return;
-    ['touchstart','touchmove'].forEach(type=>el.addEventListener(type,e=>e.preventDefault(),{passive:false}));
+    el.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
     el.addEventListener('pointerdown',()=>document.body.classList.add('drawingGesture42'));
     ['pointerup','pointercancel','pointerleave'].forEach(type=>el.addEventListener(type,()=>document.body.classList.remove('drawingGesture42')));
   }
@@ -114,6 +114,8 @@
       <aside class="surveySide42">
         <h3>Floor readiness</h3>
         <div id="floorChecklist42"></div>
+        <label class="small" for="floorNotes42">Engineer notes / uncertainties</label>
+        <textarea id="floorNotes42" rows="3" placeholder="Optional notes for the desktop reviewer" style="width:100%;border:1px solid #c9d3d7;border-radius:9px;padding:9px;font:inherit;resize:vertical"></textarea>
         <button id="markReady42" class="green" style="margin-top:8px">Mark floor ready</button>
         <button id="markWorking42" style="margin-top:8px">Return to in progress</button>
         <div class="deviceHint42">Autosaves locally on this device. Phone, tablet and laptop layouts adapt automatically.</div>
@@ -144,7 +146,7 @@
   function uid(prefix='f'){return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
   function blankSurvey(){
     return {id:uid('survey'),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'In Progress',floors:[
-      {id:uid(),name:'Ground Floor',status:'Not started',walls:[],source:'',rooms:null,detail:null,checks:{exits:false,panel:false,stairs:false},updatedAt:null}
+      {id:uid(),name:'Ground Floor',status:'Not started',walls:[],source:'',rooms:null,detail:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null}
     ]};
   }
   let survey=blankSurvey();
@@ -157,15 +159,20 @@
   }
   function floorById(id=activeFloorId){return survey.floors.find(f=>f.id===id)}
   function currentRoomState(){
+    const card=$id('roomCard');
+    if(!card||card.classList.contains('hidden'))return null;
     try{return window.fireZoneRoomModel?.getRooms?.()||null}catch{return null}
   }
   function currentDetailState(){
+    const card=$id('doorLabelCard32');
+    if(!card||card.classList.contains('hidden'))return null;
     try{return window.fireZoneDoorEditor?.getState?.()||window.fireZoneDoorLabelModel||null}catch{return null}
   }
   function saveCurrentFloor(persist=true){
     const f=floorById();if(!f)return;
     f.walls=clone(walls||[]);
     f.source=source||f.source||'';
+    if($id('floorNotes42'))f.notes=$id('floorNotes42').value||'';
     const rooms=currentRoomState();if(rooms?.length)f.rooms=clone(rooms);
     const detail=currentDetailState();if(detail&&(detail.rooms?.length||detail.doors?.length||detail.markers?.length))f.detail=clone(detail);
     if(f.status==='Not started'&&f.walls.length)f.status='In progress';
@@ -180,6 +187,7 @@
     return d;
   }
   function persistDraft(){
+    survey.meta={customer:$id('customer')?.value||'',site:$id('site')?.value||'',engineer:$id('engineer')?.value||'',date:$id('date')?.value||''};
     try{localStorage.setItem(storageKey,JSON.stringify(draftForStorage()))}catch(e){
       const el=$id('submissionSummary42');if(el)el.textContent='Local autosave is full on this device. The live survey is still available; submit or remove large photo data before closing.';
     }
@@ -193,6 +201,12 @@
       }
     }catch{}
     activeFloorId=survey.floors[0]?.id||null;
+    if(survey.meta){
+      if($id('customer'))$id('customer').value=survey.meta.customer||'';
+      if($id('site'))$id('site').value=survey.meta.site||'';
+      if($id('engineer'))$id('engineer').value=survey.meta.engineer||'';
+      if($id('date')&&survey.meta.date)$id('date').value=survey.meta.date;
+    }
   }
 
   function hideFloorStages(){
@@ -218,6 +232,7 @@
     restoreSource(f);
     walls=clone(f.walls||[]).map(normaliseWall);selected=-1;history=[];
     $id('floor').value=f.name;
+    if($id('floorNotes42'))$id('floorNotes42').value=f.notes||'';
     renderAll();
     if(walls.length){
       $id('resultCard').classList.remove('hidden');
@@ -299,7 +314,7 @@
   $id('addFloor42').onclick=()=>{
     saveCurrentFloor(false);
     const name=floorNamePrompt();if(!name)return;
-    const f={id:uid(),name,status:'Not started',walls:[],source:'',rooms:null,detail:null,checks:{exits:false,panel:false,stairs:false},updatedAt:null};
+    const f={id:uid(),name,status:'Not started',walls:[],source:'',rooms:null,detail:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null};
     survey.floors.push(f);persistDraft();loadFloor(f.id);
   };
   $id('duplicateFloor42').onclick=()=>{
@@ -394,6 +409,8 @@
 
   // Keep site/floor state safe during normal use.
   ['customer','site','engineer','date'].forEach(id=>$id(id)?.addEventListener('change',persistDraft));
+  $id('floorNotes42')?.addEventListener('input',()=>{const f=floorById();if(f){f.notes=$id('floorNotes42').value;persistDraft()}});
+  if($id('floor')){$id('floor').readOnly=true;$id('floor').placeholder='Active floor';$id('floor').title='Managed from the floor selector above';}
   window.addEventListener('beforeunload',()=>{try{saveCurrentFloor()}catch{}});
   setInterval(()=>{if(autosaveBusy)return;autosaveBusy=true;try{saveCurrentFloor()}finally{autosaveBusy=false}},6000);
 
