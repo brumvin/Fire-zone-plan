@@ -230,7 +230,7 @@
     activeFloorId=id;
     hideFloorStages();
     restoreSource(f);
-    walls=clone(f.walls||[]).map(normaliseWall);selected=-1;history=[];
+    walls=clone(f.walls||[]).map(w=>(w.type==='ARC'||w.axis==='A'||w.curve)?w:normaliseWall(w));selected=-1;history=[];
     $id('floor').value=f.name;
     if($id('floorNotes42'))$id('floorNotes42').value=f.notes||'';
     renderAll();
@@ -378,7 +378,7 @@
     document.body.classList.remove('engineerMode42');document.body.classList.add('desktopMode42');
     $id('customer').value=s.meta?.customer||'';$id('site').value=s.meta?.site||'';$id('engineer').value=s.meta?.engineer||'';$id('date').value=s.meta?.date||'';
     $id('floor').value=f.name;
-    walls=clone(f.walls||[]).map(normaliseWall);selected=-1;history=[];renderAll();
+    walls=clone(f.walls||[]).map(w=>(w.type==='ARC'||w.axis==='A'||w.curve)?w:normaliseWall(w));selected=-1;history=[];renderAll();
     if(f.rooms?.length)window.fireZoneRoomModel?.setRooms?.(f.rooms);
     const detail=f.detail||{rooms:f.rooms||[],doors:[],markers:[]};
     if(detail.rooms?.length){
