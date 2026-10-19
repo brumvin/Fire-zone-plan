@@ -103,7 +103,7 @@
       const dx=w.x2-w.x1,dy=w.y2-w.y1,L=dx*dx+dy*dy||1;
       const t=Math.max(0,Math.min(1,((x-w.x1)*dx+(y-w.y1)*dy)/L));
       const qx=w.x1+t*dx,qy=w.y1+t*dy,d=Math.hypot(x-qx,y-qy);
-      if(!best||d<best.d)best={x:qx,y:qy,d,axis:w.axis};
+      if(!best||d<best.d)best={x:qx,y:qy,d,axis:w.axis,angle:Math.atan2(dy,dx)*180/Math.PI};
     }
     return best;
   }
@@ -132,7 +132,7 @@
     doors=out;render();
   }
   function doorSvg(d,i){
-    const sel=selected?.kind==='door'&&selected.i===i,sz=d.size||1,w=(d.type==='door2'?34:25)*sz,rot=d.axis==='V'?90:0,sy=d.flip?-1:1,sx=d.hand?-1:1;
+    const sel=selected?.kind==='door'&&selected.i===i,sz=d.size||1,w=(d.type==='door2'?34:25)*sz,rot=(d.angle!==undefined?d.angle:(d.axis==='V'?90:0)),sy=d.flip?-1:1,sx=d.hand?-1:1;
     const swing=d.type==='door2'
       ?'<path d="M-'+(34*sz)+' 0 A'+(34*sz)+' '+(34*sz)+' 0 0 1 0 '+(34*sz)+' M'+(34*sz)+' 0 A'+(34*sz)+' '+(34*sz)+' 0 0 0 0 '+(34*sz)+'" stroke="#1769aa" stroke-width="3" fill="none"/>'
       :'<path d="M-'+(25*sz)+' 0 A'+(50*sz)+' '+(50*sz)+' 0 0 1 '+(25*sz)+' '+(50*sz)+'" stroke="#1769aa" stroke-width="3" fill="none"/>';
@@ -189,8 +189,17 @@
     rooms=window.fireZoneRoomModel.getRooms();
     selected=null;markers=[];armed='';
     detectDoors();
+    const manual=window.fireZoneManualAssets||{};
+    for(const md of (manual.doors||[])){
+      if(doors.some(d=>Math.hypot(d.x-md.x,d.y-md.y)<18))continue;
+      doors.push({type:'door1',x:md.x,y:md.y,axis:'A',angle:md.angle||0,flip:false,hand:false,size:md.size||1,status:'edited'});
+    }
+    for(const st of (manual.stairs||[])){
+      markers.push({type:'stairs',x:st.x,y:st.y,rot:st.rot||0,size:st.size||1,tx:22,ty:5});
+    }
+    render();
     $('doorLabelCard32').classList.remove('hidden');
-    $('reviewStatus32').textContent=doors.length+' door suggestion'+(doors.length===1?'':'s')+' found from wall gaps. Review, move, confirm or delete each one.';
+    $('reviewStatus32').textContent=doors.length+' door'+(doors.length===1?'':'s')+' available. Manual doors/stairs are carried through from the engineer drawing; detected doors still need review.';
     $('doorLabelCard32').scrollIntoView({behavior:'smooth'});
   }
   window.addEventListener('firezone:rooms-approved',startStage);
@@ -221,7 +230,7 @@
     if(armed){
       if(armed.startsWith('door')){
         const w=nearestWall(p.x,p.y),d={type:armed,x:snap(p.x),y:snap(p.y),axis:'H',flip:false,hand:false,size:1,status:'edited'};
-        if(w&&w.d<45){d.x=snap(w.x);d.y=snap(w.y);d.axis=w.axis}
+        if(w&&w.d<45){d.x=snap(w.x);d.y=snap(w.y);d.axis=w.axis;d.angle=w.angle}
         doors.push(d);selected={kind:'door',i:doors.length-1};
       }else{
         markers.push({type:armed,x:snap(p.x),y:snap(p.y),rot:0,tx:22,ty:5,size:1});selected={kind:'marker',i:markers.length-1};
@@ -242,7 +251,7 @@
       const r=rooms[drag.i];r.lx=snap(drag.x+p.x-drag.p.x);r.ly=snap(drag.y+p.y-drag.p.y);
     }else if(drag.kind==='door'){
       const d=doors[drag.i],nx=drag.x+p.x-drag.p.x,ny=drag.y+p.y-drag.p.y,w=nearestWall(nx,ny);
-      if(w&&w.d<45){d.x=snap(w.x);d.y=snap(w.y);d.axis=w.axis}else{d.x=snap(nx);d.y=snap(ny)}
+      if(w&&w.d<45){d.x=snap(w.x);d.y=snap(w.y);d.axis=w.axis;d.angle=w.angle}else{d.x=snap(nx);d.y=snap(ny)}
       d.status='edited';
     }else if(drag.kind==='markerText'){
       const m=markers[drag.i];m.tx=snap(drag.tx+p.x-drag.p.x);m.ty=snap(drag.ty+p.y-drag.p.y);
