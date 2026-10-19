@@ -92,7 +92,7 @@
   const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
   function doorSvg(d){
-    const sz=d.size||1,w=(d.type==='door2'?34:25)*sz,rot=d.axis==='V'?90:0,sy=d.flip?-1:1,sx=d.hand?-1:1;
+    const sz=d.size||1,w=(d.type==='door2'?34:25)*sz,rot=(d.angle!==undefined?d.angle:(d.axis==='V'?90:0)),sy=d.flip?-1:1,sx=d.hand?-1:1;
     const swing=d.type==='door2'
       ?'<path d="M-'+(34*sz)+' 0 A'+(34*sz)+' '+(34*sz)+' 0 0 1 0 '+(34*sz)+' M'+(34*sz)+' 0 A'+(34*sz)+' '+(34*sz)+' 0 0 0 0 '+(34*sz)+'" stroke="#1769aa" stroke-width="3" fill="none"/>'
       :'<path d="M-'+(25*sz)+' 0 A'+(50*sz)+' '+(50*sz)+' 0 0 1 '+(25*sz)+' '+(50*sz)+'" stroke="#1769aa" stroke-width="3" fill="none"/>';
