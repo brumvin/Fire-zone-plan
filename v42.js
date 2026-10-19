@@ -146,7 +146,7 @@
   function uid(prefix='f'){return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
   function blankSurvey(){
     return {id:uid('survey'),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'In Progress',floors:[
-      {id:uid(),name:'Ground Floor',status:'Not started',walls:[],source:'',rooms:null,detail:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null}
+      {id:uid(),name:'Ground Floor',status:'Not started',walls:[],source:'',rooms:null,detail:null,manual:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null}
     ]};
   }
   let survey=blankSurvey();
@@ -175,6 +175,7 @@
     if($id('floorNotes42'))f.notes=$id('floorNotes42').value||'';
     const rooms=currentRoomState();if(rooms?.length)f.rooms=clone(rooms);
     const detail=currentDetailState();if(detail&&(detail.rooms?.length||detail.doors?.length||detail.markers?.length))f.detail=clone(detail);
+    try{if(window.fireZoneManualEditor)f.manual=clone(window.fireZoneManualEditor.getState())}catch{}
     if(f.status==='Not started'&&f.walls.length)f.status='In progress';
     f.updatedAt=new Date().toISOString();
     survey.updatedAt=f.updatedAt;
@@ -234,6 +235,9 @@
     $id('floor').value=f.name;
     if($id('floorNotes42'))$id('floorNotes42').value=f.notes||'';
     renderAll();
+    if(window.fireZoneManualEditor){
+      try{window.fireZoneManualEditor.setState(f.manual||{walls:[],doors:[],stairs:[]})}catch{}
+    }
     if(walls.length){
       $id('resultCard').classList.remove('hidden');
       $id('status').textContent='Loaded '+f.name+': '+walls.length+' structural walls.';
@@ -255,13 +259,14 @@
     const rooms=f.detail?.rooms||f.rooms||[];
     const doors=f.detail?.doors||[];
     const markers=f.detail?.markers||[];
+    const manual=f.manual||{};
     return {
       plan:(f.walls||[]).length>=4,
       rooms:rooms.length>0,
       doors:!!f.detail && doors.every(d=>d.status!=='review'),
       exit:markers.some(m=>m.type==='exit'||m.type==='entrance'),
       panel:markers.some(m=>m.type==='facp'),
-      stairs:markers.some(m=>m.type==='stairs')
+      stairs:markers.some(m=>m.type==='stairs')||(manual.stairs||[]).length>0
     };
   }
   function renderChecklist(){
@@ -314,7 +319,7 @@
   $id('addFloor42').onclick=()=>{
     saveCurrentFloor(false);
     const name=floorNamePrompt();if(!name)return;
-    const f={id:uid(),name,status:'Not started',walls:[],source:'',rooms:null,detail:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null};
+    const f={id:uid(),name,status:'Not started',walls:[],source:'',rooms:null,detail:null,manual:null,notes:'',checks:{exits:false,panel:false,stairs:false},updatedAt:null};
     survey.floors.push(f);persistDraft();loadFloor(f.id);
   };
   $id('duplicateFloor42').onclick=()=>{
