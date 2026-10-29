@@ -360,11 +360,27 @@
   function refresh45(){
     if(!sourceImg)return;
     renderCorners();
-    try{autoCorners()}catch{}
   }
   $('camera').addEventListener('change',()=>setTimeout(refresh45,180));
   $('picker').addEventListener('change',()=>setTimeout(refresh45,180));
   if(sourceImg)refresh45();
+
+  const baseRenderSvg45=renderSvg;
+  renderSvg=function(svgId,interactive=false){
+    if(svgId!=='plan'&&svgId!=='editPlan'){baseRenderSvg45(svgId,interactive);return}
+    const svg=$(svgId);
+    let s='<rect width="760" height="500" fill="white"/>';
+    walls.forEach((w,i)=>{
+      const review=w.confidence==='review',medium=w.confidence==='medium';
+      const cls='wall '+(selected===i?'selected ':'')+(review?'review45wall ':medium?'medium45wall ':'');
+      const stroke=review?'#c47a00':medium?'#365f78':'#1b313b';
+      s+='<g class="'+cls+'" data-i="'+i+'"><line class="wallLine" stroke="'+stroke+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>';
+      if(interactive)s+='<line class="wallHit" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>';
+      if(interactive&&selected===i)s+='<circle class="handle" data-end="1" cx="'+w.x1+'" cy="'+w.y1+'" r="10"/><circle class="handle" data-end="2" cx="'+w.x2+'" cy="'+w.y2+'" r="10"/>';
+      s+='</g>';
+    });
+    svg.innerHTML=s;
+  };
 
   $('scanBtn').textContent='Run V45 evidence-first scan';
   runScan=scan45;$('scanBtn').onclick=scan45;$('rescanBtn').onclick=scan45;
