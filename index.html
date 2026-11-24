@@ -118,9 +118,9 @@
         <div class="grid2">
           <button id="shorter">Shorter / smaller</button><button id="longer">Longer / larger</button>
           <button id="rotateSelected">Rotate 90°</button><button id="duplicateSelected">Duplicate</button>
-          <button id="flipDoor">Flip door swing</button><button id="toggleDoorType">Single / double</button>
-          <button id="renameRoom">Rename room</button><button id="deleteSelected" class="danger">Delete</button>
-          <button id="clearDrawing" class="danger">Clear drawing</button>
+          <button id="flipDoor">Flip door swing</button><button id="handDoor">Change handing</button>
+          <button id="toggleDoorType">Single / double</button><button id="renameRoom">Rename room</button>
+          <button id="deleteSelected" class="danger">Delete</button><button id="clearDrawing" class="danger">Clear drawing</button>
         </div>
         <div class="toolbar" style="margin-top:10px">
           <button id="undoBtn">Undo</button><button id="redoBtn">Redo</button><button id="tidyBtn">Tidy plan</button>
@@ -166,7 +166,8 @@
       <div class="toolbar">
         <button id="autoRooms">Generate rooms</button>
         <button id="addRoom">Add room manually</button>
-        <button id="addReviewDoor">Add door</button>
+        <button id="addReviewDoor">Single door</button>
+        <button id="addReviewDoubleDoor">Double door</button>
         <button data-marker="Main Entrance">Main Entrance</button>
         <button data-marker="Fire Exit">Fire Exit</button>
         <button data-marker="FACP">FACP</button>
@@ -187,8 +188,15 @@
             <div id="zoneButtons" class="zoneButtons"></div>
           </div>
           <div class="panel" style="margin-top:10px">
-            <b>Review controls</b>
-            <div class="toolbar" style="margin-top:8px">
+            <b>Selected item controls</b>
+            <div id="desktopSelectedInfo" class="small" style="margin:6px 0 8px">Nothing selected.</div>
+            <div class="grid2">
+              <button id="desktopSmaller">Smaller</button>
+              <button id="desktopLarger">Larger</button>
+              <button id="desktopRotate">Rotate 90°</button>
+              <button id="desktopFlipDoor">Flip swing</button>
+              <button id="desktopHandDoor">Change handing</button>
+              <button id="desktopToggleDoor">Single / double</button>
               <button id="deleteDesktopItem" class="danger">Delete selected</button>
               <button id="clearZones">Clear zones</button>
             </div>
