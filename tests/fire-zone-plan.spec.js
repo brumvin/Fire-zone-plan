@@ -1,6 +1,21 @@
 const { test, expect } = require('@playwright/test');
 
 function pt(box,x,y){ return {x:box.x+x, y:box.y+y}; }
+async function pointerDrag(page, locator, x1, y1, x2, y2, pointerId=21) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('No bounding box for pointer drag target');
+  const sx=box.x+x1, sy=box.y+y1, ex=box.x+x2, ey=box.y+y2;
+  await locator.dispatchEvent('pointerdown',{pointerId,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:sx,clientY:sy});
+  await locator.dispatchEvent('pointermove',{pointerId,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:ex,clientY:ey});
+  await locator.dispatchEvent('pointerup',{pointerId,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:ex,clientY:ey});
+}
+async function pointerClick(page, locator, x, y, pointerId=31) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('No bounding box for pointer click target');
+  const cx=box.x+x, cy=box.y+y;
+  await locator.dispatchEvent('pointerdown',{pointerId,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:cx,clientY:cy});
+  await locator.dispatchEvent('pointerup',{pointerId,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:cx,clientY:cy});
+}
 
 test('engineer to office to final plan workflow', async ({ page }) => {
   const pageErrors=[];
@@ -27,20 +42,15 @@ test('engineer to office to final plan workflow', async ({ page }) => {
     [420,330,120,330],
     [120,330,120,100]
   ];
+  let pid=40;
   for (const [x1,y1,x2,y2] of lines) {
-    await page.mouse.move(box.x+x1,box.y+y1);
-    await page.mouse.down();
-    await page.mouse.move(box.x+x2,box.y+y2);
-    await page.mouse.up();
+    await pointerDrag(page, svg, x1,y1,x2,y2,pid++);
   }
   await expect(page.locator('#engineerSvg [data-kind="wall"]')).toHaveCount(4);
 
   // Drawing a new wall near an existing one must not move the original.
   const firstBefore = await page.locator('#engineerSvg [data-kind="wall"]').first().locator('line.wall').getAttribute('x1');
-  await page.mouse.move(box.x+120,box.y+120);
-  await page.mouse.down();
-  await page.mouse.move(box.x+300,box.y+120);
-  await page.mouse.up();
+  await pointerDrag(page, svg, 120,120,300,120,60);
   await expect(page.locator('#engineerSvg [data-kind="wall"]')).toHaveCount(5);
   const firstAfter = await page.locator('#engineerSvg [data-kind="wall"]').first().locator('line.wall').getAttribute('x1');
   expect(firstAfter).toBe(firstBefore);
@@ -51,27 +61,26 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await expect(page.locator('#engineerSvg [data-kind="wallhandle"]')).toHaveCount(2);
   const h2 = page.locator('#engineerSvg [data-kind="wallhandle"][data-end="2"]');
   const hb = await h2.boundingBox();
-  await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);
-  await page.mouse.down();
-  await page.mouse.move(hb.x+70,hb.y+hb.height/2);
-  await page.mouse.up();
+  await h2.dispatchEvent('pointerdown',{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:hb.x+hb.width/2,clientY:hb.y+hb.height/2});
+  await svg.dispatchEvent('pointermove',{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:hb.x+70,clientY:hb.y+hb.height/2});
+  await svg.dispatchEvent('pointerup',{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:hb.x+70,clientY:hb.y+hb.height/2});
   await expect(page.locator('#engineerSvg [data-kind="wallhandle"]')).toHaveCount(2);
 
   // Add single door.
   await page.click('[data-tool="door"]');
-  await page.mouse.click(box.x+250,box.y+100);
+  await pointerClick(page, svg, 250,100,70);
   await expect(page.locator('#engineerSvg [data-kind="door"]')).toHaveCount(1);
 
   // Add double door and confirm two swing paths are rendered.
   await page.click('[data-tool="doubleDoor"]');
-  await page.mouse.click(box.x+330,box.y+100);
+  await pointerClick(page, svg, 330,100,71);
   await expect(page.locator('#engineerSvg [data-kind="door"]')).toHaveCount(2);
   const doubleDoor = page.locator('#engineerSvg [data-kind="door"]').nth(1);
   await expect(doubleDoor.locator('path.door')).toHaveCount(2);
 
   // Add staircase, select it, and verify direct resize handle exists.
   await page.click('[data-tool="stairs"]');
-  await page.mouse.click(box.x+260,box.y+220);
+  await pointerClick(page, svg, 260,220,72);
   await expect(page.locator('#engineerSvg [data-kind="stairs"]')).toHaveCount(1);
   await page.click('[data-tool="select"]');
   await page.locator('#engineerSvg [data-kind="stairs"]').click();
@@ -79,27 +88,23 @@ test('engineer to office to final plan workflow', async ({ page }) => {
 
   // Add a room and move its label independently.
   await page.click('[data-tool="room"]');
-  await page.mouse.move(box.x+135,box.y+135);
-  await page.mouse.down();
-  await page.mouse.move(box.x+395,box.y+305);
-  await page.mouse.up();
+  await pointerDrag(page, svg, 135,135,395,305,73);
   await expect(page.locator('#engineerSvg [data-kind="room"]')).toHaveCount(1);
   await page.click('[data-tool="select"]');
   const labelHit = page.locator('#engineerSvg [data-kind="roomlabel"]');
   await expect(labelHit).toHaveCount(1);
   const lb = await labelHit.boundingBox();
-  await page.mouse.move(lb.x+lb.width/2,lb.y+lb.height/2);
-  await page.mouse.down();
-  await page.mouse.move(lb.x+80,lb.y+40);
-  await page.mouse.up();
+  await labelHit.dispatchEvent('pointerdown',{pointerId:74,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:lb.x+lb.width/2,clientY:lb.y+lb.height/2});
+  await svg.dispatchEvent('pointermove',{pointerId:74,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:lb.x+80,clientY:lb.y+40});
+  await svg.dispatchEvent('pointerup',{pointerId:74,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:lb.x+80,clientY:lb.y+40});
 
   // Engineer fire-safety markers.
   await page.click('[data-eng-marker="Main Entrance"]');
-  await page.mouse.click(box.x+150,box.y+345);
+  await pointerClick(page, svg, 150,345,75);
   await page.click('[data-eng-marker="Fire Exit"]');
-  await page.mouse.click(box.x+390,box.y+345);
+  await pointerClick(page, svg, 390,345,76);
   await page.click('[data-eng-marker="FACP"]');
-  await page.mouse.click(box.x+170,box.y+180);
+  await pointerClick(page, svg, 170,180,77);
   await expect(page.locator('#engineerSvg [data-kind="marker"]')).toHaveCount(3);
 
   // Mark ready and submit to office.
@@ -159,10 +164,7 @@ test('submission is blocked when floor is not ready', async ({ page }) => {
   if(pageErrors.length) throw new Error('Runtime page error: '+pageErrors.join(' | '));
   const svg=page.locator('#engineerSvg');
   const box=await svg.boundingBox();
-  await page.mouse.move(box.x+100,box.y+100);
-  await page.mouse.down();
-  await page.mouse.move(box.x+300,box.y+100);
-  await page.mouse.up();
+  await pointerDrag(page, svg, 100,100,300,100,90);
   await page.click('#submitSurvey');
   await expect(page.locator('#submitMessage')).toContainText('not marked Ready');
   await expect(page.locator('#engineerMode')).toBeVisible();
