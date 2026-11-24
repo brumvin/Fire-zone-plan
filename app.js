@@ -240,7 +240,7 @@ function finishEngineer(e){
 }
 esvg.onpointerup=finishEngineer;esvg.onpointercancel=finishEngineer;
 
-$('saveDraft').onclick=function(){saveDraft(false)};$('mobileSave').onclick=function(){saveDraft(false)};$('mobileFloors').onclick=function(){$('floorTabs').scrollIntoView({behavior:'smooth'})}
+$('saveDraft').onclick=function(){saveDraft(false)};$('mobileSave').onclick=function(){saveDraft(false)};$('mobileFloors').onclick=function(){$('floorTabs').scrollIntoView({behavior:'smooth'})};
 ['customer','site','building','engineer','floorNotes','floorStatus','checkExits','checkPanel','checkStairs'].forEach(function(id){$(id).addEventListener('change',function(){saveDraft(true);renderFloorTabs();updateReadiness()})});
 
 function openPhotoPicker(inputId){
