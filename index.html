@@ -57,7 +57,10 @@
     <div class="layoutScan">
       <div class="panel">
         <div class="toolbar">
-          <label style="display:inline-block"><input id="photoInput" type="file" accept="image/*" capture="environment" hidden><button type="button" id="photoBtn">Take / choose photo</button></label>
+          <input id="photoInput" type="file" accept="image/*" hidden>
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+          <button type="button" id="photoBtn">Upload photo</button>
+          <button type="button" id="cameraBtn">Take photo</button>
           <button id="scanBtn" class="blue">Run evidence scan</button>
           <button id="clearPhoto">Clear photo</button>
         </div>
