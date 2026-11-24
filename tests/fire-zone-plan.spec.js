@@ -3,8 +3,13 @@ const { test, expect } = require('@playwright/test');
 function pt(box,x,y){ return {x:box.x+x, y:box.y+y}; }
 
 test('engineer to office to final plan workflow', async ({ page }) => {
+  const pageErrors=[];
+  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.message); });
+  page.on('console', m => console.log('BROWSER:', m.type(), m.text()));
   await page.goto('http://127.0.0.1:4173/');
   await expect(page.locator('h1')).toContainText('Fire Zone Plan');
+  await page.waitForTimeout(300);
+  if(pageErrors.length) throw new Error('Runtime page error: '+pageErrors.join(' | '));
 
   await page.fill('#customer','Test Customer');
   await page.fill('#site','Test Site');
@@ -146,7 +151,12 @@ test('engineer to office to final plan workflow', async ({ page }) => {
 });
 
 test('submission is blocked when floor is not ready', async ({ page }) => {
+  const pageErrors=[];
+  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.message); });
+  page.on('console', m => console.log('BROWSER:', m.type(), m.text()));
   await page.goto('http://127.0.0.1:4173/');
+  await page.waitForTimeout(300);
+  if(pageErrors.length) throw new Error('Runtime page error: '+pageErrors.join(' | '));
   const svg=page.locator('#engineerSvg');
   const box=await svg.boundingBox();
   await page.mouse.move(box.x+100,box.y+100);
