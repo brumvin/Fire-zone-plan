@@ -95,8 +95,17 @@
       <button data-tool="angle" aria-pressed="false">Angled wall</button>
       <button data-tool="arc" aria-pressed="false">Arc wall</button>
       <button data-tool="room" aria-pressed="false">Rectangle room</button>
-      <button data-tool="door" aria-pressed="false">Add door</button>
-      <button data-tool="stairs" aria-pressed="false">Add staircase</button>
+      <button data-tool="door" aria-pressed="false">Single door</button>
+      <button data-tool="doubleDoor" aria-pressed="false">Double door</button>
+      <button data-tool="stairs" aria-pressed="false">Staircase</button>
+    </div>
+    <div class="toolbar detailTools" style="margin-top:7px">
+      <button data-eng-marker="Main Entrance">Main Entrance</button>
+      <button data-eng-marker="Fire Exit">Fire Exit</button>
+      <button data-eng-marker="FACP">FACP</button>
+      <button data-eng-marker="MCP">MCP</button>
+      <button data-eng-marker="You Are Here">You Are Here</button>
+      <button data-eng-marker="Staircase">Staircase marker</button>
     </div>
     <div id="toolHint" class="small" style="margin:7px 0">Drag to draw a horizontal or vertical wall.</div>
     <div class="layout2">
@@ -107,9 +116,11 @@
         <b>Selected item</b>
         <div id="selectedInfo" class="small" style="margin:8px 0 12px">Nothing selected.</div>
         <div class="grid2">
-          <button id="shorter">Shorter</button><button id="longer">Longer</button>
-          <button id="rotateSelected">Rotate</button><button id="duplicateSelected">Duplicate</button>
-          <button id="deleteSelected" class="danger">Delete</button><button id="clearDrawing" class="danger">Clear drawing</button>
+          <button id="shorter">Shorter / smaller</button><button id="longer">Longer / larger</button>
+          <button id="rotateSelected">Rotate 90°</button><button id="duplicateSelected">Duplicate</button>
+          <button id="flipDoor">Flip door swing</button><button id="toggleDoorType">Single / double</button>
+          <button id="renameRoom">Rename room</button><button id="deleteSelected" class="danger">Delete</button>
+          <button id="clearDrawing" class="danger">Clear drawing</button>
         </div>
         <div class="toolbar" style="margin-top:10px">
           <button id="undoBtn">Undo</button><button id="redoBtn">Redo</button><button id="tidyBtn">Tidy plan</button>
@@ -123,8 +134,10 @@
     <div class="sectionTitle"><div><h3>3. Survey submission</h3><div class="small">All floors must be marked Ready before submission.</div></div></div>
     <div class="toolbar">
       <button id="saveDraft">Save draft</button>
-      <button id="submitSurvey" class="green">Submit for Zone Plan</button>
+      <button id="markFloorReady" class="blue">Mark current floor Ready</button>
+      <button id="submitSurvey" class="green">Submit to Office Review</button>
     </div>
+    <div id="readinessSummary" class="notice" style="margin-top:10px">Checking survey readiness…</div>
     <div id="submitMessage" class="small" style="margin-top:8px">Draft autosaves locally on this device.</div>
   </div>
   <div class="mobileBar"><button id="mobileFloors">Floors</button><button id="mobileSave" class="primary">Save floor</button></div>
