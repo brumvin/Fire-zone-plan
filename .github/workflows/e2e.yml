@@ -1,0 +1,33 @@
+name: Fire Zone Plan E2E
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'style.css'
+      - 'tests/**'
+      - '.github/workflows/e2e.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --save-dev @playwright/test
+          npx playwright install --with-deps chromium
+      - name: Start app
+        run: |
+          python3 -m http.server 4173 >/tmp/fz-http.log 2>&1 &
+          echo $! > /tmp/fz-http.pid
+          sleep 2
+      - name: Run end-to-end tests
+        run: npx playwright test tests/fire-zone-plan.spec.js --reporter=line
