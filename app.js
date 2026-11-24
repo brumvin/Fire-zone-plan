@@ -60,7 +60,7 @@ $('deleteFloor').onclick=function(){if(state.floors.length===1){alert('At least 
 
 function setTool(t){
   tool=t;selected=null;drag=null;Array.from(document.querySelectorAll('[data-tool]')).forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.tool===t))});
-  var m={select:'Tap or drag an existing item.',wall:'Drag to draw a horizontal or vertical wall.',angle:'Drag freely to draw an angled wall.',arc:'Drag to create a curved wall.',room:'Drag a rectangle to create a room outline.',door:'Tap close to a wall to place a door.',stairs:'Tap to place a staircase.'};
+  var m={select:'Tap a wall to select it. Drag the orange end handles to change its length, or drag the wall itself to move it.',wall:'Drag to draw a horizontal or vertical wall. Existing walls stay fixed while you draw the next one.',angle:'Drag freely to draw an angled wall. Existing walls stay fixed.',arc:'Drag to create a curved wall. Existing walls stay fixed.',room:'Drag a rectangle to create a room outline.',door:'Tap close to a wall to place a door.',stairs:'Tap to place a staircase.'};
   $('toolHint').textContent=m[t]||'';renderEngineer()
 }
 Array.from(document.querySelectorAll('[data-tool]')).forEach(function(b){b.onclick=function(){setTool(b.dataset.tool)}});
@@ -70,8 +70,9 @@ function lineWall(a,b,free){if(free)return{x1:a.x,y1:a.y,x2:b.x,y2:b.y,axis:'A'}
 function nearestWall(list,x,y){var best=null;list.forEach(function(w,i){if(w.type==='ARC')return;var dx=w.x2-w.x1,dy=w.y2-w.y1,L=dx*dx+dy*dy||1,t=Math.max(0,Math.min(1,((x-w.x1)*dx+(y-w.y1)*dy)/L)),qx=w.x1+t*dx,qy=w.y1+t*dy,d=Math.hypot(x-qx,y-qy);if(!best||d<best.d)best={i:i,x:qx,y:qy,d:d,angle:Math.atan2(dy,dx)*180/Math.PI}});return best}
 function wallSvg(w,i,sel){
   var cls='wall '+(w.confidence==='review'?'review ':w.confidence==='medium'?'medium ':'')+(sel?'selected':'');
-  if(w.type==='ARC')return '<g data-kind="wall" data-i="'+i+'"><path class="'+cls+'" fill="none" d="M'+w.x1+' '+w.y1+' Q'+w.cx+' '+w.cy+' '+w.x2+' '+w.y2+'"/><path class="wallHit" fill="none" d="M'+w.x1+' '+w.y1+' Q'+w.cx+' '+w.cy+' '+w.x2+' '+w.y2+'"/></g>';
-  return '<g data-kind="wall" data-i="'+i+'"><line class="'+cls+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/><line class="wallHit" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/></g>';
+  var handles=sel?'<g class="wallHandles"><circle class="handle" data-kind="wallhandle" data-i="'+i+'" data-end="1" cx="'+w.x1+'" cy="'+w.y1+'" r="9"/><circle class="handle" data-kind="wallhandle" data-i="'+i+'" data-end="2" cx="'+w.x2+'" cy="'+w.y2+'" r="9"/></g>':'';
+  if(w.type==='ARC')return '<g data-kind="wall" data-i="'+i+'"><path class="'+cls+'" fill="none" d="M'+w.x1+' '+w.y1+' Q'+w.cx+' '+w.cy+' '+w.x2+' '+w.y2+'"/><path class="wallHit" fill="none" d="M'+w.x1+' '+w.y1+' Q'+w.cx+' '+w.cy+' '+w.x2+' '+w.y2+'"/></g>'+handles;
+  return '<g data-kind="wall" data-i="'+i+'"><line class="'+cls+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/><line class="wallHit" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/></g>'+handles;
 }
 function doorSvg(d,i,sel){return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')"><rect class="hitbox" x="-36" y="-20" width="72" height="70"/><line class="door '+(sel?'selected':'')+'" x1="-22" y1="0" x2="22" y2="0"/><path class="door" d="M-22 0 A44 44 0 0 1 22 44"/></g>'}
 function stairSvg(s,i,sel,kind){var z='';for(var n=0;n<6;n++)z+='<line x1="-22" y1="'+(-23+n*9)+'" x2="22" y2="'+(-23+n*9)+'"/>';return '<g data-kind="'+(kind||'stairs')+'" data-i="'+i+'" transform="translate('+s.x+' '+s.y+') rotate('+(s.rot||0)+')"><rect class="hitbox" x="-32" y="-36" width="64" height="74"/><g class="stairs '+(sel?'selected':'')+'"><rect x="-24" y="-28" width="48" height="58"/>'+z+'<path d="M0 22V-18m0 0l-6 8m6-8l6 8" fill="none"/></g></g>'}
@@ -97,7 +98,7 @@ function renderEngineer(){
   }
   svg.innerHTML=s;
   $('drawingStats').textContent=f.walls.length+' walls · '+f.rooms.length+' rooms · '+f.doors.length+' doors · '+f.stairs.length+' stairs';
-  $('selectedInfo').textContent=selected?(selected.kind+' selected. Drag it directly or use the controls below.'):'Nothing selected.';
+  $('selectedInfo').textContent=selected?(selected.kind==='wall'?'Wall selected. Drag either orange end handle to change its length; drag the line itself to move the whole wall.':selected.kind+' selected. Drag it directly or use the controls below.'):'Nothing selected.';
 }
 function getSelected(){
   if(!selected)return null;var f=floor();var a=selected.kind==='wall'?f.walls:selected.kind==='door'?f.doors:selected.kind==='stairs'?f.stairs:selected.kind==='room'?f.rooms:f.markers;return a[selected.i]
@@ -119,15 +120,49 @@ $('tidyBtn').onclick=function(){snapshot();var f=floor();f.walls.forEach(functio
 var esvg=$('engineerSvg');
 esvg.onpointerdown=function(e){
   e.preventDefault();var p=svgPoint(esvg,e),hit=e.target.closest('[data-kind]');
-  if(hit){var kind=hit.dataset.kind,i=+hit.dataset.i;selected={kind:kind,i:i};var o=getSelected();drag={type:'move',kind:kind,i:i,id:e.pointerId,start:p,orig:clone(o)};esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return}
-  if(tool==='wall'||tool==='angle'||tool==='arc'||tool==='room'){drag={type:'draw',id:e.pointerId,start:p,now:p};esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return}
+
+  // Drawing tools always win over existing hitboxes. This lets a new wall start
+  // directly beside or from the end of an existing wall without moving it.
+  if(tool==='wall'||tool==='angle'||tool==='arc'||tool==='room'){
+    drag={type:'draw',id:e.pointerId,start:p,now:p};esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+  }
   if(tool==='door'){var q=nearestWall(floor().walls,p.x,p.y);if(q&&q.d<60){snapshot();floor().doors.push({x:q.x,y:q.y,angle:q.angle,size:1});selected={kind:'door',i:floor().doors.length-1};renderEngineer();saveDraft(true)}return}
-  if(tool==='stairs'){snapshot();floor().stairs.push({x:p.x,y:p.y,rot:0,size:1});selected={kind:'stairs',i:floor().stairs.length-1};renderEngineer();saveDraft(true)}
+  if(tool==='stairs'){snapshot();floor().stairs.push({x:p.x,y:p.y,rot:0,size:1});selected={kind:'stairs',i:floor().stairs.length-1};renderEngineer();saveDraft(true);return}
+
+  // Existing geometry is editable only in Select / move mode.
+  if(tool==='select'&&hit){
+    var kind=hit.dataset.kind,i=+hit.dataset.i;
+    if(kind==='wallhandle'){
+      selected={kind:'wall',i:i};snapshot();
+      drag={type:'wall-end',kind:'wall',i:i,end:+hit.dataset.end,id:e.pointerId,start:p,orig:clone(floor().walls[i])};
+      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+    }
+    selected={kind:kind,i:i};var o=getSelected();snapshot();
+    drag={type:'move',kind:kind,i:i,id:e.pointerId,start:p,orig:clone(o)};
+    esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+  }
+  if(tool==='select'){selected=null;renderEngineer()}
 };
 esvg.onpointermove=function(e){
   if(!drag||drag.id!==e.pointerId)return;e.preventDefault();var p=svgPoint(esvg,e);
   if(drag.type==='draw'){drag.now=p;renderEngineer();return}
-  var o=getSelected();if(!o)return;var dx=p.x-drag.start.x,dy=p.y-drag.start.y;
+  var o=getSelected();if(!o)return;
+
+  if(drag.type==='wall-end'){
+    var orig=drag.orig;
+    if(orig.type==='ARC'){
+      if(drag.end===1){o.x1=p.x;o.y1=p.y}else{o.x2=p.x;o.y2=p.y}
+    }else if(orig.axis==='H'){
+      if(drag.end===1){o.x1=p.x;o.y1=orig.y1}else{o.x2=p.x;o.y2=orig.y2}
+    }else if(orig.axis==='V'){
+      if(drag.end===1){o.x1=orig.x1;o.y1=p.y}else{o.x2=orig.x2;o.y2=p.y}
+    }else{
+      if(drag.end===1){o.x1=p.x;o.y1=p.y}else{o.x2=p.x;o.y2=p.y}
+    }
+    renderEngineer();return
+  }
+
+  var dx=p.x-drag.start.x,dy=p.y-drag.start.y;
   if(drag.kind==='wall'){o.x1=drag.orig.x1+dx;o.x2=drag.orig.x2+dx;o.y1=drag.orig.y1+dy;o.y2=drag.orig.y2+dy;if(o.type==='ARC'){o.cx=drag.orig.cx+dx;o.cy=drag.orig.cy+dy}}
   else if(drag.kind==='room'){o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}
   else if(drag.kind==='door'){var q=nearestWall(floor().walls,drag.orig.x+dx,drag.orig.y+dy);if(q&&q.d<60){o.x=q.x;o.y=q.y;o.angle=q.angle}else{o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}}
@@ -139,7 +174,7 @@ function finishEngineer(e){
     if(tool==='room'){var x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>=30&&rh>=30){floor().rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(floor().rooms.length+1),zone:0});selected={kind:'room',i:floor().rooms.length-1}}}
     else if(tool==='arc'){if(Math.hypot(b.x-a.x,b.y-a.y)>=20){var mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1;floor().walls.push({type:'ARC',axis:'ARC',x1:a.x,y1:a.y,x2:b.x,y2:b.y,cx:mx-dy/L*35,cy:my+dx/L*35});selected={kind:'wall',i:floor().walls.length-1}}}
     else{var w=lineWall(a,b,tool==='angle');if(wallLen(w)>=15){floor().walls.push(w);selected={kind:'wall',i:floor().walls.length-1}}}
-  }else snapshot();
+  }
   drag=null;renderEngineer();saveDraft(true)
 }
 esvg.onpointerup=finishEngineer;esvg.onpointercancel=finishEngineer;
