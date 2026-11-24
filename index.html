@@ -109,12 +109,26 @@
     </div>
     <div id="toolHint" class="small" style="margin:7px 0">Drag to draw a horizontal or vertical wall.</div>
     <div class="layout2">
-      <div class="canvasWrap">
-        <svg id="engineerSvg" class="planSvg" viewBox="0 0 760 500"></svg>
+      <div>
+        <div class="toolbar zoomBar" style="margin-bottom:7px">
+          <button id="engZoomOut" type="button">− Zoom</button>
+          <button id="engZoomReset" type="button">100%</button>
+          <button id="engZoomIn" type="button">+ Zoom</button>
+          <button id="engPan" type="button" aria-pressed="false">Pan view</button>
+          <span id="engZoomLabel" class="pill">100%</span>
+        </div>
+        <div class="canvasWrap">
+          <svg id="engineerSvg" class="planSvg" viewBox="0 0 760 500"></svg>
+        </div>
       </div>
       <div class="panel">
         <b>Selected item</b>
         <div id="selectedInfo" class="small" style="margin:8px 0 12px">Nothing selected.</div>
+        <div id="engineerSizeControls" class="field hidden" style="margin-bottom:10px">
+          <label>Exact item size — <span id="engineerSizeText">100%</span></label>
+          <input id="engineerSizeRange" type="range" min="25" max="300" step="1" value="100">
+          <input id="engineerSizeNumber" type="number" min="25" max="300" step="1" value="100" aria-label="Selected item size percent">
+        </div>
         <div class="grid2">
           <button id="shorter">Shorter / smaller</button><button id="longer">Longer / larger</button>
           <button id="rotateSelected">Rotate 90°</button><button id="duplicateSelected">Duplicate</button>
@@ -176,7 +190,16 @@
         <button data-marker="Staircase">Staircase</button>
       </div>
       <div class="layout2" style="margin-top:10px">
-        <div class="canvasWrap"><svg id="desktopSvg" class="planSvg" viewBox="0 0 760 500"></svg></div>
+        <div>
+          <div class="toolbar zoomBar" style="margin-bottom:7px">
+            <button id="deskZoomOut" type="button">− Zoom</button>
+            <button id="deskZoomReset" type="button">100%</button>
+            <button id="deskZoomIn" type="button">+ Zoom</button>
+            <button id="deskPan" type="button" aria-pressed="false">Pan view</button>
+            <span id="deskZoomLabel" class="pill">100%</span>
+          </div>
+          <div class="canvasWrap"><svg id="desktopSvg" class="planSvg" viewBox="0 0 760 500"></svg></div>
+        </div>
         <div>
           <div class="panel">
             <b>Rooms</b>
@@ -190,6 +213,11 @@
           <div class="panel" style="margin-top:10px">
             <b>Selected item controls</b>
             <div id="desktopSelectedInfo" class="small" style="margin:6px 0 8px">Nothing selected.</div>
+            <div id="desktopSizeControls" class="field hidden" style="margin-bottom:10px">
+              <label>Exact item size — <span id="desktopSizeText">100%</span></label>
+              <input id="desktopSizeRange" type="range" min="25" max="300" step="1" value="100">
+              <input id="desktopSizeNumber" type="number" min="25" max="300" step="1" value="100" aria-label="Selected desktop item size percent">
+            </div>
             <div class="grid2">
               <button id="desktopSmaller">Smaller</button>
               <button id="desktopLarger">Larger</button>
