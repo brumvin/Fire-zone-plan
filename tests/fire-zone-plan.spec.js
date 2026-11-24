@@ -4,7 +4,7 @@ function pt(box,x,y){ return {x:box.x+x, y:box.y+y}; }
 
 test('engineer to office to final plan workflow', async ({ page }) => {
   const pageErrors=[];
-  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.message); });
+  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.stack || e.message); });
   page.on('console', m => console.log('BROWSER:', m.type(), m.text()));
   await page.goto('http://127.0.0.1:4173/');
   await expect(page.locator('h1')).toContainText('Fire Zone Plan');
@@ -152,7 +152,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
 
 test('submission is blocked when floor is not ready', async ({ page }) => {
   const pageErrors=[];
-  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.message); });
+  page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.stack || e.message); });
   page.on('console', m => console.log('BROWSER:', m.type(), m.text()));
   await page.goto('http://127.0.0.1:4173/');
   await page.waitForTimeout(300);
