@@ -108,21 +108,44 @@ function wallSvg(w,i,sel){
   return '<g data-kind="wall" data-i="'+i+'"><line class="'+cls+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/><line class="wallHit" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/></g>'+handles;
 }
 function doorSvg(d,i,sel){
-  var size=d.size||1,half=22*size,depth=44*size,swing=d.swing===-1?-1:1,hand=d.hand===-1?-1:1,type=d.type||'single';
-  var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-depth-18)+'" width="'+(half*2+36)+'" height="'+(depth*2+36)+'"/>';
+  var size=d.size||1,swing=d.swing===-1?-1:1,hand=d.hand===-1?-1:1,type=d.type||'single';
   var cls='door '+(sel?'selected':'');
-  var handle=sel?'<circle class="handle" data-kind="doorhandle" data-i="'+i+'" cx="'+(36*size)+'" cy="0" r="9"/>':'';
+  var handle=sel?'<circle class="handle" data-kind="doorhandle" data-i="'+i+'" cx="'+(42*size)+'" cy="0" r="9"/>':'';
+
   if(type==='double'){
-    var leaf=half;
+    // Conventional double-door plan symbol:
+    // hinges are at the two outer jambs; both leaves meet at the centre when closed.
+    var half=28*size,leaf=half;
+    var leftHinge=-half,rightHinge=half;
+    var leftOpenX=leftHinge,leftOpenY=swing*leaf;
+    var rightOpenX=rightHinge,rightOpenY=swing*leaf;
+    var sweepLeft=swing>0?0:1,sweepRight=swing>0?1:0;
+    var activeX=hand<0?-7*size:7*size;
+    var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-leaf-18)+'" width="'+(half*2+36)+'" height="'+(leaf*2+36)+'"/>';
     return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
-      '<line class="'+cls+'" x1="'+(-leaf)+'" y1="0" x2="'+leaf+'" y2="0"/>'+
-      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+(swing>0?1:0)+' '+(-leaf*hand)+' '+(leaf*swing)+'"/>'+
-      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+(swing>0?0:1)+' '+(leaf*hand)+' '+(leaf*swing)+'"/>'+handle+'</g>'
+      '<line class="'+cls+'" x1="'+leftHinge+'" y1="0" x2="'+leftOpenX+'" y2="'+leftOpenY+'"/>'+
+      '<line class="'+cls+'" x1="'+rightHinge+'" y1="0" x2="'+rightOpenX+'" y2="'+rightOpenY+'"/>'+
+      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+sweepLeft+' '+leftOpenX+' '+leftOpenY+'"/>'+
+      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+sweepRight+' '+rightOpenX+' '+rightOpenY+'"/>'+
+      '<line class="door doorClosedGuide" x1="'+leftHinge+'" y1="0" x2="0" y2="0"/>'+
+      '<line class="door doorClosedGuide" x1="0" y1="0" x2="'+rightHinge+'" y2="0"/>'+
+      '<circle class="doorActiveLeaf" cx="'+activeX+'" cy="0" r="'+(2.8*size)+'"/>'+
+      handle+'</g>'
   }
-  var start=-half*hand,end=half*hand,sy=depth*swing;
+
+  // Conventional single-door symbol: one hinge at the selected jamb,
+  // leaf shown open at 90 degrees with an arc back to its closed position.
+  var width=44*size,half=width/2;
+  var hingeX=hand<0?half:-half;
+  var closedX=hand<0?-half:half;
+  var openX=hingeX,openY=swing*width;
+  var sweep=(hand<0)===(swing>0)?0:1;
+  var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-width-18)+'" width="'+(width+36)+'" height="'+(width*2+36)+'"/>';
   return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
-    '<line class="'+cls+'" x1="'+(-half)+'" y1="0" x2="'+half+'" y2="0"/>'+
-    '<path class="door" d="M'+start+' 0 A'+depth+' '+depth+' 0 0 '+(swing>0?1:0)+' '+end+' '+sy+'"/>'+handle+'</g>'
+    '<line class="'+cls+'" x1="'+hingeX+'" y1="0" x2="'+openX+'" y2="'+openY+'"/>'+
+    '<path class="door" d="M'+closedX+' 0 A'+width+' '+width+' 0 0 '+sweep+' '+openX+' '+openY+'"/>'+
+    '<line class="door doorClosedGuide" x1="'+hingeX+'" y1="0" x2="'+closedX+'" y2="0"/>'+
+    handle+'</g>'
 }
 function stairSvg(s,i,sel,kind){
   var sc=s.size||1,z='',left=-22*sc,right=22*sc,top=-23*sc,step=9*sc;
