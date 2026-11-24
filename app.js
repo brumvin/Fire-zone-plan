@@ -105,13 +105,20 @@ function doorSvg(d,i,sel){
 function stairSvg(s,i,sel,kind){
   var sc=s.size||1,z='',left=-22*sc,right=22*sc,top=-23*sc,step=9*sc;
   for(var n=0;n<6;n++)z+='<line x1="'+left+'" y1="'+(top+n*step)+'" x2="'+right+'" y2="'+(top+n*step)+'"/>';
-  return '<g data-kind="'+(kind||'stairs')+'" data-i="'+i+'" transform="translate('+s.x+' '+s.y+') rotate('+(s.rot||0)+')"><rect class="hitbox" x="'+(-34*sc)+'" y="'+(-38*sc)+'" width="'+(68*sc)+'" height="'+(78*sc)+'"/><g class="stairs '+(sel?'selected':'')+'"><rect x="'+(-24*sc)+'" y="'+(-28*sc)+'" width="'+(48*sc)+'" height="'+(58*sc)+'"/>'+z+'<path d="M0 '+(22*sc)+'V'+(-18*sc)+'m0 0l'+(-6*sc)+' '+(8*sc)+'m'+(6*sc)+' '+(-8*sc)+'l'+(6*sc)+' '+(8*sc)+'" fill="none"/></g></g>'
+  var handle=sel?'<circle class="handle" data-kind="stairhandle" data-i="'+i+'" cx="'+(30*sc)+'" cy="'+(34*sc)+'" r="9"/>':'';
+  return '<g data-kind="'+(kind||'stairs')+'" data-i="'+i+'" transform="translate('+s.x+' '+s.y+') rotate('+(s.rot||0)+')"><rect class="hitbox" x="'+(-34*sc)+'" y="'+(-38*sc)+'" width="'+(68*sc)+'" height="'+(78*sc)+'"/><g class="stairs '+(sel?'selected':'')+'"><rect x="'+(-24*sc)+'" y="'+(-28*sc)+'" width="'+(48*sc)+'" height="'+(58*sc)+'"/>'+z+'<path d="M0 '+(22*sc)+'V'+(-18*sc)+'m0 0l'+(-6*sc)+' '+(8*sc)+'m'+(6*sc)+' '+(-8*sc)+'l'+(6*sc)+' '+(8*sc)+'" fill="none"/></g>'+handle+'</g>'
 }
 function markerSvg(m,i,sel){
   var label=esc(m.type),sc=m.size||1,w=Math.max(40,label.length*7+14)*sc,h=28*sc;
   return '<g data-kind="marker" data-i="'+i+'" transform="translate('+m.x+' '+m.y+') rotate('+(m.rot||0)+')"><rect class="hitbox" x="'+(-w/2-8)+'" y="'+(-h/2-8)+'" width="'+(w+16)+'" height="'+(h+16)+'"/><rect class="marker '+(sel?'selected':'')+'" x="'+(-w/2)+'" y="'+(-h/2)+'" rx="5" width="'+w+'" height="'+h+'"/><text x="0" y="'+(4*sc)+'" text-anchor="middle" font-size="'+(11*sc)+'" font-weight="700">'+label+'</text></g>'
 }
-function roomSvg(r,i,sel){var cls='room zone'+(r.zone||0)+' '+(sel?'selected':'');return '<g data-kind="room" data-i="'+i+'"><rect class="'+cls+'" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'"/><rect class="hitbox" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'"/><text class="roomLabel" x="'+(r.x+r.w/2)+'" y="'+(r.y+r.h/2)+'" text-anchor="middle">'+esc(r.name||('Room '+(i+1)))+(r.zone?' · Z'+r.zone:'')+'</text></g>'}
+function roomSvg(r,i,sel){
+  var cls='room zone'+(r.zone||0)+' '+(sel?'selected':''),
+      lx=r.labelX!=null?r.labelX:r.x+r.w/2,ly=r.labelY!=null?r.labelY:r.y+r.h/2,
+      label=esc(r.name||('Room '+(i+1)))+(r.zone?' · Z'+r.zone:''),
+      lw=Math.max(54,String(r.name||('Room '+(i+1))).length*8+34);
+  return '<g data-kind="room" data-i="'+i+'"><rect class="'+cls+'" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'"/><rect class="hitbox" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'"/><rect class="labelHit" data-kind="roomlabel" data-i="'+i+'" x="'+(lx-lw/2)+'" y="'+(ly-16)+'" width="'+lw+'" height="28"/><text class="roomLabel" x="'+lx+'" y="'+ly+'" text-anchor="middle">'+label+'</text></g>'
+}
 
 function renderEngineer(){
   var f=floor(),svg=$('engineerSvg'),s='<defs><pattern id="gridE" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0 L0 0 0 20" fill="none" stroke="#edf1f2" stroke-width="1"/></pattern></defs><rect width="760" height="500" fill="url(#gridE)"/>';
@@ -142,7 +149,8 @@ function alterSize(dir){
   renderEngineer();saveDraft(true)
 }
 $('shorter').onclick=function(){alterSize(-1)};$('longer').onclick=function(){alterSize(1)}
-$('flipDoor').onclick=function(){var o=getSelected();if(!o||selected.kind!=='door'){$('selectedInfo').textContent='Select a door first.';return}snapshot();o.swing=(o.swing===-1?1:-1);o.hand=(o.hand===-1?1:-1);renderEngineer();saveDraft(true)}
+$('flipDoor').onclick=function(){var o=getSelected();if(!o||selected.kind!=='door'){$('selectedInfo').textContent='Select a door first.';return}snapshot();o.swing=(o.swing===-1?1:-1);renderEngineer();saveDraft(true)}
+$('handDoor').onclick=function(){var o=getSelected();if(!o||selected.kind!=='door'){$('selectedInfo').textContent='Select a door first.';return}snapshot();o.hand=(o.hand===-1?1:-1);renderEngineer();saveDraft(true)}
 $('toggleDoorType').onclick=function(){var o=getSelected();if(!o||selected.kind!=='door'){$('selectedInfo').textContent='Select a door first.';return}snapshot();o.type=(o.type||'single')==='double'?'single':'double';renderEngineer();saveDraft(true)}
 $('renameRoom').onclick=function(){var o=getSelected();if(!o||selected.kind!=='room'){$('selectedInfo').textContent='Select a room first.';return}var n=prompt('Room name',o.name||'Room');if(n&&n.trim()){snapshot();o.name=n.trim();renderEngineer();saveDraft(true)}}
 $('rotateSelected').onclick=function(){var o=getSelected();if(!o)return;snapshot();if(selected.kind==='door')o.angle=(o.angle+90)%360;else if(selected.kind==='stairs'||selected.kind==='marker')o.rot=((o.rot||0)+90)%360;else if(selected.kind==='wall'){var mx=(o.x1+o.x2)/2,my=(o.y1+o.y2)/2,dx=(o.x2-o.x1)/2,dy=(o.y2-o.y1)/2;o.x1=mx+dy;o.y1=my-dx;o.x2=mx-dy;o.y2=my+dx;o.axis='A'}renderEngineer();saveDraft(true)}
@@ -173,6 +181,16 @@ esvg.onpointerdown=function(e){
       drag={type:'wall-end',kind:'wall',i:i,end:+hit.dataset.end,id:e.pointerId,start:p,orig:clone(floor().walls[i])};
       esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
     }
+    if(kind==='stairhandle'){
+      selected={kind:'stairs',i:i};snapshot();
+      drag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(floor().stairs[i])};
+      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+    }
+    if(kind==='roomlabel'){
+      selected={kind:'room',i:i};snapshot();
+      drag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(floor().rooms[i])};
+      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+    }
     selected={kind:kind,i:i};var o=getSelected();snapshot();
     drag={type:'move',kind:kind,i:i,id:e.pointerId,start:p,orig:clone(o)};
     esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
@@ -197,17 +215,24 @@ esvg.onpointermove=function(e){
     }
     renderEngineer();return
   }
+  if(drag.type==='stair-size'){
+    var base=Math.hypot(30,34),dist=Math.hypot(p.x-drag.orig.x,p.y-drag.orig.y);
+    o.size=Math.max(.55,Math.min(2.5,dist/base));renderEngineer();return
+  }
+  if(drag.type==='room-label'){
+    o.labelX=p.x;o.labelY=p.y;renderEngineer();return
+  }
 
   var dx=p.x-drag.start.x,dy=p.y-drag.start.y;
   if(drag.kind==='wall'){o.x1=drag.orig.x1+dx;o.x2=drag.orig.x2+dx;o.y1=drag.orig.y1+dy;o.y2=drag.orig.y2+dy;if(o.type==='ARC'){o.cx=drag.orig.cx+dx;o.cy=drag.orig.cy+dy}}
-  else if(drag.kind==='room'){o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}
+  else if(drag.kind==='room'){o.x=drag.orig.x+dx;o.y=drag.orig.y+dy;if(drag.orig.labelX!=null){o.labelX=drag.orig.labelX+dx;o.labelY=drag.orig.labelY+dy}}
   else if(drag.kind==='door'){var q=nearestWall(floor().walls,drag.orig.x+dx,drag.orig.y+dy);if(q&&q.d<60){o.x=q.x;o.y=q.y;o.angle=q.angle}else{o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}}
   else{o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}renderEngineer()
 };
 function finishEngineer(e){
   if(!drag||drag.id!==e.pointerId)return;
   if(drag.type==='draw'){snapshot();var a=drag.start,b=drag.now;
-    if(tool==='room'){var x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>=30&&rh>=30){floor().rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(floor().rooms.length+1),zone:0});selected={kind:'room',i:floor().rooms.length-1}}}
+    if(tool==='room'){var x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>=30&&rh>=30){floor().rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(floor().rooms.length+1),zone:0,labelX:null,labelY:null});selected={kind:'room',i:floor().rooms.length-1}}}
     else if(tool==='arc'){if(Math.hypot(b.x-a.x,b.y-a.y)>=20){var mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1;floor().walls.push({type:'ARC',axis:'ARC',x1:a.x,y1:a.y,x2:b.x,y2:b.y,cx:mx-dy/L*35,cy:my+dx/L*35});selected={kind:'wall',i:floor().walls.length-1}}}
     else{var w=lineWall(a,b,tool==='angle');if(wallLen(w)>=15){floor().walls.push(w);selected={kind:'wall',i:floor().walls.length-1}}}
   }
@@ -351,7 +376,9 @@ function renderDesktop(){
   f.stairs.forEach(function(x,i){s+=stairSvg(x,i,desktopSelected&&desktopSelected.kind==='stairs'&&desktopSelected.i===i)});
   f.markers.forEach(function(x,i){s+=markerSvg(x,i,desktopSelected&&desktopSelected.kind==='marker'&&desktopSelected.i===i)});
   if(desktopDrag&&desktopDrag.type==='room'){var x=Math.min(desktopDrag.start.x,desktopDrag.now.x),y=Math.min(desktopDrag.start.y,desktopDrag.now.y),rw=Math.abs(desktopDrag.now.x-desktopDrag.start.x),rh=Math.abs(desktopDrag.now.y-desktopDrag.start.y);s+='<rect class="guide" x="'+x+'" y="'+y+'" width="'+rw+'" height="'+rh+'"/>'}
-  $('desktopSvg').innerHTML=s;renderRoomList()
+  $('desktopSvg').innerHTML=s;
+  if($('desktopSelectedInfo'))$('desktopSelectedInfo').textContent=desktopSelected?(desktopSelected.kind==='door'?'Door selected — edit type, swing, handing, size or rotation.':desktopSelected.kind==='stairs'?'Staircase selected — drag the orange handle or use size/rotate controls.':desktopSelected.kind==='room'?'Room selected — drag its label independently or assign a zone.':desktopSelected.kind+' selected.'):'Nothing selected.';
+  renderRoomList()
 }
 function renderRoomList(){
   var f=reviewCurrentFloor(),h='';if(!f)return;if(!f.rooms.length)h='<div class="small">No rooms yet. Generate rooms or add them manually.</div>';
@@ -363,27 +390,63 @@ function lineCoversH(w,y,x1,x2){return w.type!=='ARC'&&Math.abs(w.y1-y)<=8&&Math
 function lineCoversV(w,x,y1,y2){return w.type!=='ARC'&&Math.abs(w.x1-x)<=8&&Math.abs(w.x2-x)<=8&&Math.min(w.y1,w.y2)<=y1+10&&Math.max(w.y1,w.y2)>=y2-10}
 $('autoRooms').onclick=function(){
   var f=reviewCurrentFloor();if(!f)return;var xs=[],ys=[];f.walls.forEach(function(w){if(w.type==='ARC')return;if(Math.abs(w.x1-w.x2)<6)xs.push(snap(w.x1));if(Math.abs(w.y1-w.y2)<6)ys.push(snap(w.y1))});xs=Array.from(new Set(xs)).sort(function(a,b){return a-b});ys=Array.from(new Set(ys)).sort(function(a,b){return a-b});
-  var rooms=[];for(var yi=0;yi<ys.length-1;yi++)for(var xi=0;xi<xs.length-1;xi++){var x1=xs[xi],x2=xs[xi+1],y1=ys[yi],y2=ys[yi+1];if((x2-x1)*(y2-y1)<1200||x2-x1<35||y2-y1<35)continue;var top=f.walls.some(function(w){return lineCoversH(w,y1,x1,x2)}),bot=f.walls.some(function(w){return lineCoversH(w,y2,x1,x2)}),lef=f.walls.some(function(w){return lineCoversV(w,x1,y1,y2)}),rig=f.walls.some(function(w){return lineCoversV(w,x2,y1,y2)});if(top&&bot&&lef&&rig)rooms.push({id:uid(),x:x1+3,y:y1+3,w:x2-x1-6,h:y2-y1-6,name:'Room '+(rooms.length+1),zone:0})}
+  var rooms=[];for(var yi=0;yi<ys.length-1;yi++)for(var xi=0;xi<xs.length-1;xi++){var x1=xs[xi],x2=xs[xi+1],y1=ys[yi],y2=ys[yi+1];if((x2-x1)*(y2-y1)<1200||x2-x1<35||y2-y1<35)continue;var top=f.walls.some(function(w){return lineCoversH(w,y1,x1,x2)}),bot=f.walls.some(function(w){return lineCoversH(w,y2,x1,x2)}),lef=f.walls.some(function(w){return lineCoversV(w,x1,y1,y2)}),rig=f.walls.some(function(w){return lineCoversV(w,x2,y1,y2)});if(top&&bot&&lef&&rig)rooms.push({id:uid(),x:x1+3,y:y1+3,w:x2-x1-6,h:y2-y1-6,name:'Room '+(rooms.length+1),zone:0,labelX:null,labelY:null})}
   if(rooms.length)f.rooms=rooms;else $('verifyMessage').textContent='No complete rectangular rooms could be generated automatically. Use Add room manually for this plan.';desktopSelected=null;saveReviewData();renderDesktop()
 };
 $('addRoom').onclick=function(){desktopTool='room';desktopSelected=null;$('verifyMessage').textContent='Drag a rectangle on the plan to add a room manually.'}
-$('addReviewDoor').onclick=function(){desktopTool='door';desktopSelected=null;$('verifyMessage').textContent='Tap close to a wall to add a door.'}
+$('addReviewDoor').onclick=function(){desktopTool='door';desktopSelected=null;$('verifyMessage').textContent='Tap close to a wall to add a single door.'}
+$('addReviewDoubleDoor').onclick=function(){desktopTool='doubleDoor';desktopSelected=null;$('verifyMessage').textContent='Tap close to a wall to add a double door.'}
 Array.from(document.querySelectorAll('[data-marker]')).forEach(function(b){b.onclick=function(){desktopTool='marker';desktopSelected=null;b.dataset.pending='1';Array.from(document.querySelectorAll('[data-marker]')).forEach(function(x){if(x!==b)delete x.dataset.pending});$('verifyMessage').textContent='Tap the plan to place '+b.dataset.marker+'.'}})
 var zoneH='';for(var z=1;z<=9;z++)zoneH+='<button data-zone="'+z+'">Zone '+z+'</button>';$('zoneButtons').innerHTML=zoneH;
 Array.from($('zoneButtons').querySelectorAll('[data-zone]')).forEach(function(b){b.onclick=function(){var f=reviewCurrentFloor();if(!desktopSelected||desktopSelected.kind!=='room'){ $('verifyMessage').textContent='Select a room first.';return}f.rooms[desktopSelected.i].zone=+b.dataset.zone;saveReviewData();renderDesktop()}})
 $('clearZones').onclick=function(){var f=reviewCurrentFloor();if(!f)return;f.rooms.forEach(function(r){r.zone=0});saveReviewData();renderDesktop()}
 $('deleteDesktopItem').onclick=function(){var f=reviewCurrentFloor();if(!f||!desktopSelected)return;var a=desktopSelected.kind==='room'?f.rooms:desktopSelected.kind==='door'?f.doors:desktopSelected.kind==='marker'?f.markers:f.stairs;a.splice(desktopSelected.i,1);desktopSelected=null;saveReviewData();renderDesktop()}
+function getDesktopSelected(){
+  var f=reviewCurrentFloor();if(!f||!desktopSelected)return null;
+  var a=desktopSelected.kind==='room'?f.rooms:desktopSelected.kind==='door'?f.doors:desktopSelected.kind==='marker'?f.markers:f.stairs;
+  return a[desktopSelected.i]
+}
+function desktopResize(dir){
+  var o=getDesktopSelected();if(!o)return;
+  if(desktopSelected.kind==='room'){o.w=Math.max(20,o.w+(dir>0?10:-10));o.h=Math.max(20,o.h+(dir>0?10:-10))}
+  else if(desktopSelected.kind==='door'||desktopSelected.kind==='stairs'||desktopSelected.kind==='marker'){o.size=Math.max(.55,Math.min(2.5,(o.size||1)+(dir>0?.12:-.12)))}
+  saveReviewData();renderDesktop()
+}
+$('desktopSmaller').onclick=function(){desktopResize(-1)}
+$('desktopLarger').onclick=function(){desktopResize(1)}
+$('desktopRotate').onclick=function(){var o=getDesktopSelected();if(!o)return;if(desktopSelected.kind==='door')o.angle=((o.angle||0)+90)%360;else if(desktopSelected.kind==='stairs'||desktopSelected.kind==='marker')o.rot=((o.rot||0)+90)%360;saveReviewData();renderDesktop()}
+$('desktopFlipDoor').onclick=function(){var o=getDesktopSelected();if(!o||desktopSelected.kind!=='door'){$('verifyMessage').textContent='Select a door first.';return}o.swing=(o.swing===-1?1:-1);saveReviewData();renderDesktop()}
+$('desktopHandDoor').onclick=function(){var o=getDesktopSelected();if(!o||desktopSelected.kind!=='door'){$('verifyMessage').textContent='Select a door first.';return}o.hand=(o.hand===-1?1:-1);saveReviewData();renderDesktop()}
+$('desktopToggleDoor').onclick=function(){var o=getDesktopSelected();if(!o||desktopSelected.kind!=='door'){$('verifyMessage').textContent='Select a door first.';return}o.type=(o.type||'single')==='double'?'single':'double';saveReviewData();renderDesktop()}
 
 var dsvg=$('desktopSvg');
 dsvg.onpointerdown=function(e){
   e.preventDefault();var f=reviewCurrentFloor();if(!f)return;var p=svgPoint(dsvg,e),hit=e.target.closest('[data-kind]');
-  if(hit){var k=hit.dataset.kind;if(k==='wall')return;desktopSelected={kind:k,i:+hit.dataset.i};var a=k==='room'?f.rooms:k==='door'?f.doors:k==='marker'?f.markers:f.stairs,oo=a[desktopSelected.i];desktopDrag={type:'move',kind:k,i:desktopSelected.i,id:e.pointerId,start:p,orig:clone(oo)};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
+  if(hit){
+    var k=hit.dataset.kind,i=+hit.dataset.i;
+    if(k==='wall')return;
+    if(k==='stairhandle'){desktopSelected={kind:'stairs',i:i};desktopDrag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(f.stairs[i])};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
+    if(k==='roomlabel'){desktopSelected={kind:'room',i:i};desktopDrag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(f.rooms[i])};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
+    desktopSelected={kind:k,i:i};var a=k==='room'?f.rooms:k==='door'?f.doors:k==='marker'?f.markers:f.stairs,oo=a[desktopSelected.i];desktopDrag={type:'move',kind:k,i:desktopSelected.i,id:e.pointerId,start:p,orig:clone(oo)};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return
+  }
   if(desktopTool==='room'){desktopDrag={type:'room',id:e.pointerId,start:p,now:p};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
-  if(desktopTool==='door'){var q=nearestWall(f.walls,p.x,p.y);if(q&&q.d<60){f.doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:'single',swing:1,hand:1});desktopSelected={kind:'door',i:f.doors.length-1};desktopTool='select';saveReviewData();renderDesktop()}return}
-  if(desktopTool==='marker'){var b=document.querySelector('[data-marker][data-pending="1"]'),type=b?b.dataset.marker:'Marker';f.markers.push({type:type,x:p.x,y:p.y,rot:0});desktopSelected={kind:'marker',i:f.markers.length-1};if(b)delete b.dataset.pending;desktopTool='select';saveReviewData();renderDesktop()}
+  if(desktopTool==='door'||desktopTool==='doubleDoor'){var q=nearestWall(f.walls,p.x,p.y);if(q&&q.d<60){f.doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:desktopTool==='doubleDoor'?'double':'single',swing:1,hand:1});desktopSelected={kind:'door',i:f.doors.length-1};desktopTool='select';saveReviewData();renderDesktop()}return}
+  if(desktopTool==='marker'){var b=document.querySelector('[data-marker][data-pending="1"]'),type=b?b.dataset.marker:'Marker';f.markers.push({type:type,x:p.x,y:p.y,rot:0,size:1});desktopSelected={kind:'marker',i:f.markers.length-1};if(b)delete b.dataset.pending;desktopTool='select';saveReviewData();renderDesktop()}
 };
-dsvg.onpointermove=function(e){if(!desktopDrag||desktopDrag.id!==e.pointerId)return;e.preventDefault();var p=svgPoint(dsvg,e),f=reviewCurrentFloor();if(desktopDrag.type==='room'){desktopDrag.now=p;renderDesktop();return}var a=desktopDrag.kind==='room'?f.rooms:desktopDrag.kind==='door'?f.doors:desktopDrag.kind==='marker'?f.markers:f.stairs,o=a[desktopDrag.i],dx=p.x-desktopDrag.start.x,dy=p.y-desktopDrag.start.y;if(desktopDrag.kind==='room'){o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy}else if(desktopDrag.kind==='door'){var q=nearestWall(f.walls,desktopDrag.orig.x+dx,desktopDrag.orig.y+dy);if(q&&q.d<60){o.x=q.x;o.y=q.y;o.angle=q.angle}else{o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy}}else{o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy}renderDesktop()};
-function finishDesktop(e){if(!desktopDrag||desktopDrag.id!==e.pointerId)return;var f=reviewCurrentFloor();if(desktopDrag.type==='room'){var a=desktopDrag.start,b=desktopDrag.now,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>30&&rh>30){f.rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(f.rooms.length+1),zone:0});desktopSelected={kind:'room',i:f.rooms.length-1}}desktopTool='select'}desktopDrag=null;saveReviewData();renderDesktop()}
+dsvg.onpointermove=function(e){
+  if(!desktopDrag||desktopDrag.id!==e.pointerId)return;e.preventDefault();
+  var p=svgPoint(dsvg,e),f=reviewCurrentFloor();
+  if(desktopDrag.type==='room'){desktopDrag.now=p;renderDesktop();return}
+  var a=desktopDrag.kind==='room'?f.rooms:desktopDrag.kind==='door'?f.doors:desktopDrag.kind==='marker'?f.markers:f.stairs,o=a[desktopDrag.i];
+  if(desktopDrag.type==='stair-size'){var base=Math.hypot(30,34),dist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=Math.max(.55,Math.min(2.5,dist/base));renderDesktop();return}
+  if(desktopDrag.type==='room-label'){o.labelX=p.x;o.labelY=p.y;renderDesktop();return}
+  var dx=p.x-desktopDrag.start.x,dy=p.y-desktopDrag.start.y;
+  if(desktopDrag.kind==='room'){o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy;if(desktopDrag.orig.labelX!=null){o.labelX=desktopDrag.orig.labelX+dx;o.labelY=desktopDrag.orig.labelY+dy}}
+  else if(desktopDrag.kind==='door'){var q=nearestWall(f.walls,desktopDrag.orig.x+dx,desktopDrag.orig.y+dy);if(q&&q.d<60){o.x=q.x;o.y=q.y;o.angle=q.angle}else{o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy}}
+  else{o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy}
+  renderDesktop()
+};
+function finishDesktop(e){if(!desktopDrag||desktopDrag.id!==e.pointerId)return;var f=reviewCurrentFloor();if(desktopDrag.type==='room'){var a=desktopDrag.start,b=desktopDrag.now,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>30&&rh>30){f.rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(f.rooms.length+1),zone:0,labelX:null,labelY:null});desktopSelected={kind:'room',i:f.rooms.length-1}}desktopTool='select'}desktopDrag=null;saveReviewData();renderDesktop()}
 dsvg.onpointerup=finishDesktop;dsvg.onpointercancel=finishDesktop;
 
 $('saveReview').onclick=function(){saveReviewData();$('verifyMessage').textContent='Review saved locally.'}
