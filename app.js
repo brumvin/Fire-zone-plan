@@ -23,7 +23,8 @@ var engineerView={zoom:1,cx:W/2,cy:H/2,pan:false},desktopView={zoom:1,cx:W/2,cy:
 function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
 function applyView(svg,v,labelId){
   var vw=W/v.zoom,vh=H/v.zoom;
-  v.cx=clamp(v.cx,vw/2,W-vw/2);v.cy=clamp(v.cy,vh/2,H-vh/2);
+  v.cx=vw>=W?W/2:clamp(v.cx,vw/2,W-vw/2);
+  v.cy=vh>=H?H/2:clamp(v.cy,vh/2,H-vh/2);
   svg.setAttribute('viewBox',(v.cx-vw/2)+' '+(v.cy-vh/2)+' '+vw+' '+vh);
   if($(labelId))$(labelId).textContent=Math.round(v.zoom*100)+'%'
 }
@@ -110,17 +111,18 @@ function doorSvg(d,i,sel){
   var size=d.size||1,half=22*size,depth=44*size,swing=d.swing===-1?-1:1,hand=d.hand===-1?-1:1,type=d.type||'single';
   var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-depth-18)+'" width="'+(half*2+36)+'" height="'+(depth*2+36)+'"/>';
   var cls='door '+(sel?'selected':'');
+  var handle=sel?'<circle class="handle" data-kind="doorhandle" data-i="'+i+'" cx="'+(36*size)+'" cy="0" r="9"/>':'';
   if(type==='double'){
     var leaf=half;
     return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
       '<line class="'+cls+'" x1="'+(-leaf)+'" y1="0" x2="'+leaf+'" y2="0"/>'+
       '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+(swing>0?1:0)+' '+(-leaf*hand)+' '+(leaf*swing)+'"/>'+
-      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+(swing>0?0:1)+' '+(leaf*hand)+' '+(leaf*swing)+'"/></g>'
+      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+(swing>0?0:1)+' '+(leaf*hand)+' '+(leaf*swing)+'"/>'+handle+'</g>'
   }
   var start=-half*hand,end=half*hand,sy=depth*swing;
   return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
     '<line class="'+cls+'" x1="'+(-half)+'" y1="0" x2="'+half+'" y2="0"/>'+
-    '<path class="door" d="M'+start+' 0 A'+depth+' '+depth+' 0 0 '+(swing>0?1:0)+' '+end+' '+sy+'"/></g>'
+    '<path class="door" d="M'+start+' 0 A'+depth+' '+depth+' 0 0 '+(swing>0?1:0)+' '+end+' '+sy+'"/>'+handle+'</g>'
 }
 function stairSvg(s,i,sel,kind){
   var sc=s.size||1,z='',left=-22*sc,right=22*sc,top=-23*sc,step=9*sc;
@@ -228,6 +230,11 @@ esvg.onpointerdown=function(e){
       drag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(floor().stairs[i])};
       safePointerCapture(esvg,e.pointerId);renderEngineer();return
     }
+    if(kind==='doorhandle'){
+      selected={kind:'door',i:i};snapshot();
+      drag={type:'door-size',kind:'door',i:i,id:e.pointerId,start:p,orig:clone(floor().doors[i])};
+      safePointerCapture(esvg,e.pointerId);renderEngineer();return
+    }
     if(kind==='roomlabel'){
       selected={kind:'room',i:i};snapshot();
       drag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(floor().rooms[i])};
@@ -261,7 +268,11 @@ esvg.onpointermove=function(e){
   }
   if(drag.type==='stair-size'){
     var base=Math.hypot(30,34),dist=Math.hypot(p.x-drag.orig.x,p.y-drag.orig.y);
-    o.size=Math.max(.55,Math.min(2.5,dist/base));renderEngineer();return
+    o.size=clamp(dist/base,.25,3);renderEngineer();return
+  }
+  if(drag.type==='door-size'){
+    var doorDist=Math.hypot(p.x-drag.orig.x,p.y-drag.orig.y);
+    o.size=clamp(doorDist/36,.25,3);renderEngineer();return
   }
   if(drag.type==='room-label'){
     o.labelX=p.x;o.labelY=p.y;renderEngineer();return
@@ -492,6 +503,7 @@ dsvg.onpointerdown=function(e){
     var k=hit.dataset.kind,i=+hit.dataset.i;
     if(k==='wall')return;
     if(k==='stairhandle'){desktopSelected={kind:'stairs',i:i};desktopDrag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(f.stairs[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
+    if(k==='doorhandle'){desktopSelected={kind:'door',i:i};desktopDrag={type:'door-size',kind:'door',i:i,id:e.pointerId,start:p,orig:clone(f.doors[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
     if(k==='roomlabel'){desktopSelected={kind:'room',i:i};desktopDrag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(f.rooms[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
     desktopSelected={kind:k,i:i};var a=k==='room'?f.rooms:k==='door'?f.doors:k==='marker'?f.markers:f.stairs,oo=a[desktopSelected.i];desktopDrag={type:'move',kind:k,i:desktopSelected.i,id:e.pointerId,start:p,orig:clone(oo)};safePointerCapture(dsvg,e.pointerId);renderDesktop();return
   }
@@ -505,7 +517,8 @@ dsvg.onpointermove=function(e){
   var p=svgPoint(dsvg,e),f=reviewCurrentFloor();
   if(desktopDrag.type==='room'){desktopDrag.now=p;renderDesktop();return}
   var a=desktopDrag.kind==='room'?f.rooms:desktopDrag.kind==='door'?f.doors:desktopDrag.kind==='marker'?f.markers:f.stairs,o=a[desktopDrag.i];
-  if(desktopDrag.type==='stair-size'){var base=Math.hypot(30,34),dist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=Math.max(.55,Math.min(2.5,dist/base));renderDesktop();return}
+  if(desktopDrag.type==='stair-size'){var base=Math.hypot(30,34),dist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=clamp(dist/base,.25,3);renderDesktop();return}
+  if(desktopDrag.type==='door-size'){var doorDist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=clamp(doorDist/36,.25,3);renderDesktop();return}
   if(desktopDrag.type==='room-label'){o.labelX=p.x;o.labelY=p.y;renderDesktop();return}
   var dx=p.x-desktopDrag.start.x,dy=p.y-desktopDrag.start.y;
   if(desktopDrag.kind==='room'){o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy;if(desktopDrag.orig.labelX!=null){o.labelX=desktopDrag.orig.labelX+dx;o.labelY=desktopDrag.orig.labelY+dy}}
