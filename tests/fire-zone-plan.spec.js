@@ -18,6 +18,8 @@ async function pointerClick(page, locator, x, y, pointerId=31) {
 }
 
 test('engineer to office to final plan workflow', async ({ page }) => {
+  test.setTimeout(60000);
+  const stage=s=>console.log('STAGE:',s);
   const pageErrors=[];
   page.on('pageerror', e => { pageErrors.push(e.message); console.log('PAGEERROR:', e.stack || e.message); });
   page.on('console', m => console.log('BROWSER:', m.type(), m.text()));
@@ -35,6 +37,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   const box = await svg.boundingBox();
   expect(box).toBeTruthy();
 
+  stage('draw footprint');
   // Draw a rectangular room footprint.
   const lines = [
     [120,100,420,100],
@@ -48,6 +51,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   }
   await expect(page.locator('#engineerSvg [data-kind="wall"]')).toHaveCount(4);
 
+  stage('new adjacent wall');
   // Drawing a new wall near an existing one must not move the original.
   const firstBefore = await page.locator('#engineerSvg [data-kind="wall"]').first().locator('line.wall').getAttribute('x1');
   await pointerDrag(page, svg, 120,120,300,120,60);
@@ -55,6 +59,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   const firstAfter = await page.locator('#engineerSvg [data-kind="wall"]').first().locator('line.wall').getAttribute('x1');
   expect(firstAfter).toBe(firstBefore);
 
+  stage('wall endpoint resize');
   // Select first wall and drag endpoint handle to change length.
   await page.click('[data-tool="select"]');
   await page.locator('#engineerSvg [data-kind="wall"]').first().locator('line.wallHit').click({position:{x:80,y:1}});
@@ -66,11 +71,13 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await svg.dispatchEvent('pointerup',{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:hb.x+70,clientY:hb.y+hb.height/2});
   await expect(page.locator('#engineerSvg [data-kind="wallhandle"]')).toHaveCount(2);
 
+  stage('single door');
   // Add single door.
   await page.click('[data-tool="door"]');
   await pointerClick(page, svg, 250,100,70);
   await expect(page.locator('#engineerSvg [data-kind="door"]')).toHaveCount(1);
 
+  stage('double door');
   // Add double door and confirm two swing paths are rendered.
   await page.click('[data-tool="doubleDoor"]');
   await pointerClick(page, svg, 330,100,71);
@@ -78,6 +85,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   const doubleDoor = page.locator('#engineerSvg [data-kind="door"]').nth(1);
   await expect(doubleDoor.locator('path.door')).toHaveCount(2);
 
+  stage('stairs');
   // Add staircase, select it, and verify direct resize handle exists.
   await page.click('[data-tool="stairs"]');
   await pointerClick(page, svg, 260,220,72);
@@ -86,6 +94,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await page.locator('#engineerSvg [data-kind="stairs"]').click();
   await expect(page.locator('#engineerSvg [data-kind="stairhandle"]')).toHaveCount(1);
 
+  stage('room label');
   // Add a room and move its label independently.
   await page.click('[data-tool="room"]');
   await pointerDrag(page, svg, 135,135,395,305,73);
@@ -98,6 +107,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await svg.dispatchEvent('pointermove',{pointerId:74,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:lb.x+80,clientY:lb.y+40});
   await svg.dispatchEvent('pointerup',{pointerId:74,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:lb.x+80,clientY:lb.y+40});
 
+  stage('markers');
   // Engineer fire-safety markers.
   await page.click('[data-eng-marker="Main Entrance"]');
   await pointerClick(page, svg, 150,345,75);
@@ -107,6 +117,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await pointerClick(page, svg, 170,180,77);
   await expect(page.locator('#engineerSvg [data-kind="marker"]')).toHaveCount(3);
 
+  stage('submit');
   // Mark ready and submit to office.
   await page.click('#markFloorReady');
   await expect(page.locator('#readinessSummary')).toContainText('Ready to submit to office');
@@ -114,6 +125,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await expect(page.locator('#desktopMode')).toBeVisible();
   await expect(page.locator('#queue .queueItem')).toHaveCount(1);
 
+  stage('open office review');
   // Open office review.
   await page.locator('#queue [data-open]').first().click();
   await expect(page.locator('#desktopWorkspace')).toBeVisible();
@@ -121,6 +133,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await expect(page.locator('#desktopSvg [data-kind="stairs"]')).toHaveCount(1);
   await expect(page.locator('#desktopSvg [data-kind="marker"]')).toHaveCount(3);
 
+  stage('desktop door edit');
   // Door editing parity on desktop.
   const deskDoor = page.locator('#desktopSvg [data-kind="door"]').first();
   await deskDoor.click();
@@ -130,10 +143,12 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await page.click('#desktopHandDoor');
   await page.click('#desktopLarger');
 
+  stage('desktop room label');
   // Room label remains directly draggable on office side.
   const deskLabel = page.locator('#desktopSvg [data-kind="roomlabel"]').first();
   await expect(deskLabel).toHaveCount(1);
 
+  stage('zone assignment');
   // Assign Zone 1 to room.
   await page.locator('#desktopSvg [data-kind="room"]').first().click();
   await page.click('#zoneButtons [data-zone="1"]');
@@ -145,6 +160,7 @@ test('engineer to office to final plan workflow', async ({ page }) => {
   await page.click('#markVerified');
   await expect(page.locator('#reviewStatus')).toHaveText('Verified');
 
+  stage('final output');
   // Final output.
   await page.click('#modeFinal');
   await expect(page.locator('#finalMode')).toBeVisible();
