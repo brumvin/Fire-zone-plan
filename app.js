@@ -182,12 +182,51 @@ esvg.onpointerup=finishEngineer;esvg.onpointercancel=finishEngineer;
 $('saveDraft').onclick=function(){saveDraft(false)};$('mobileSave').onclick=function(){saveDraft(false)};$('mobileFloors').onclick=function(){$('floorTabs').scrollIntoView({behavior:'smooth'})}
 ['customer','site','building','engineer','floorNotes','floorStatus','checkExits','checkPanel','checkStairs'].forEach(function(id){$(id).addEventListener('change',function(){saveDraft(true);renderFloorTabs()})});
 
-$('photoBtn').onclick=function(){$('photoInput').click()};
-$('photoInput').onchange=function(e){
-  var file=e.target.files&&e.target.files[0];if(!file)return;var img=new Image(),r=new FileReader();
-  r.onload=function(){img.onload=function(){var max=1100,scale=Math.min(1,max/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);floor().source=c.toDataURL('image/jpeg',.78);loadFloorForm();renderEngineer();saveDraft(true)};img.src=r.result};r.readAsDataURL(file)
-};
-$('clearPhoto').onclick=function(){floor().source='';loadFloorForm();renderEngineer();saveDraft(true)}
+function openPhotoPicker(inputId){
+  var input=$(inputId);
+  if(!input)return;
+  input.value='';
+  input.click();
+}
+function processPhotoFile(file,input){
+  if(!file)return;
+  if(!file.type||file.type.indexOf('image/')!==0){
+    $('scanStatus').textContent='That file is not recognised as an image. Choose a JPG, PNG, HEIC or other image file supported by your browser.';
+    if(input)input.value='';
+    return;
+  }
+  $('scanStatus').textContent='Loading photo...';
+  var img=new Image(),r=new FileReader(),done=false;
+  function fail(msg){
+    if(done)return;done=true;
+    $('scanStatus').textContent=msg||'The photo could not be opened in this browser. Try JPG or PNG.';
+    if(input)input.value='';
+  }
+  r.onerror=function(){fail('The selected file could not be read. Please choose the image again.')};
+  r.onload=function(){
+    img.onerror=function(){fail('The image format could not be decoded by this browser. If this is HEIC/HEIF, try sharing or saving it as JPG and upload again.')};
+    img.onload=function(){
+      if(done)return;
+      try{
+        var max=1400,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));
+        var ctx=c.getContext('2d');
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
+        floor().source=c.toDataURL('image/jpeg',.82);
+        done=true;loadFloorForm();renderEngineer();saveDraft(true);
+        $('scanStatus').textContent='Photo loaded successfully. You can now run the evidence scan or draw over it manually.';
+      }catch(err){fail('The photo opened but could not be prepared for scanning. Try a JPG or PNG image.')}
+      if(input)input.value='';
+    };
+    img.src=r.result;
+  };
+  r.readAsDataURL(file);
+}
+$('photoBtn').onclick=function(){openPhotoPicker('photoInput')};
+$('cameraBtn').onclick=function(){openPhotoPicker('cameraInput')};
+$('photoInput').onchange=function(e){processPhotoFile(e.target.files&&e.target.files[0],e.target)};
+$('cameraInput').onchange=function(e){processPhotoFile(e.target.files&&e.target.files[0],e.target)};
+$('clearPhoto').onclick=function(){floor().source='';$('photoInput').value='';$('cameraInput').value='';loadFloorForm();renderEngineer();$('scanStatus').textContent='Photo cleared. Upload another photo or draw the plan manually.';saveDraft(true)}
 
 function detectLinesFromImage(img,sens){
   var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,W,H);
