@@ -9,6 +9,7 @@ function clone(x){return JSON.parse(JSON.stringify(x))}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function snap(v){return Math.round(v/5)*5}
 function wallLen(w){return Math.hypot(w.x2-w.x1,w.y2-w.y1)}
+function safePointerCapture(el,id){try{if(el&&el.setPointerCapture)el.setPointerCapture(id)}catch(e){}}
 function newFloor(name){return {id:uid(),name:name||'Ground Floor',status:'Not started',walls:[],doors:[],stairs:[],rooms:[],markers:[],notes:'',checks:{exits:false,panel:false,stairs:false},source:'',updatedAt:null,history:[],redo:[]}}
 function newState(){return {id:uid(),customer:'',site:'',building:'',engineer:'',date:new Date().toISOString().slice(0,10),status:'Draft',activeFloor:0,floors:[newFloor('Ground Floor')]}}
 function loadDraft(){try{var x=JSON.parse(localStorage.getItem(DRAFT_KEY));return x&&x.floors?x:newState()}catch(e){return newState()}}
@@ -167,7 +168,7 @@ esvg.onpointerdown=function(e){
   // Drawing tools always win over existing hitboxes. This lets a new wall start
   // directly beside or from the end of an existing wall without moving it.
   if(tool==='wall'||tool==='angle'||tool==='arc'||tool==='room'){
-    drag={type:'draw',id:e.pointerId,start:p,now:p};esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+    drag={type:'draw',id:e.pointerId,start:p,now:p};safePointerCapture(esvg,e.pointerId);renderEngineer();return
   }
   if(tool==='door'||tool==='doubleDoor'){var q=nearestWall(floor().walls,p.x,p.y);if(q&&q.d<60){snapshot();floor().doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:tool==='doubleDoor'?'double':'single',swing:1,hand:1});selected={kind:'door',i:floor().doors.length-1};renderEngineer();saveDraft(true)}return}
   if(tool==='stairs'){snapshot();floor().stairs.push({x:p.x,y:p.y,rot:0,size:1});selected={kind:'stairs',i:floor().stairs.length-1};renderEngineer();saveDraft(true);return}
@@ -179,21 +180,21 @@ esvg.onpointerdown=function(e){
     if(kind==='wallhandle'){
       selected={kind:'wall',i:i};snapshot();
       drag={type:'wall-end',kind:'wall',i:i,end:+hit.dataset.end,id:e.pointerId,start:p,orig:clone(floor().walls[i])};
-      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+      safePointerCapture(esvg,e.pointerId);renderEngineer();return
     }
     if(kind==='stairhandle'){
       selected={kind:'stairs',i:i};snapshot();
       drag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(floor().stairs[i])};
-      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+      safePointerCapture(esvg,e.pointerId);renderEngineer();return
     }
     if(kind==='roomlabel'){
       selected={kind:'room',i:i};snapshot();
       drag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(floor().rooms[i])};
-      esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+      safePointerCapture(esvg,e.pointerId);renderEngineer();return
     }
     selected={kind:kind,i:i};var o=getSelected();snapshot();
     drag={type:'move',kind:kind,i:i,id:e.pointerId,start:p,orig:clone(o)};
-    esvg.setPointerCapture&&esvg.setPointerCapture(e.pointerId);renderEngineer();return
+    safePointerCapture(esvg,e.pointerId);renderEngineer();return
   }
   if(tool==='select'){selected=null;renderEngineer()}
 };
@@ -425,11 +426,11 @@ dsvg.onpointerdown=function(e){
   if(hit){
     var k=hit.dataset.kind,i=+hit.dataset.i;
     if(k==='wall')return;
-    if(k==='stairhandle'){desktopSelected={kind:'stairs',i:i};desktopDrag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(f.stairs[i])};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
-    if(k==='roomlabel'){desktopSelected={kind:'room',i:i};desktopDrag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(f.rooms[i])};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
-    desktopSelected={kind:k,i:i};var a=k==='room'?f.rooms:k==='door'?f.doors:k==='marker'?f.markers:f.stairs,oo=a[desktopSelected.i];desktopDrag={type:'move',kind:k,i:desktopSelected.i,id:e.pointerId,start:p,orig:clone(oo)};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return
+    if(k==='stairhandle'){desktopSelected={kind:'stairs',i:i};desktopDrag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(f.stairs[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
+    if(k==='roomlabel'){desktopSelected={kind:'room',i:i};desktopDrag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(f.rooms[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
+    desktopSelected={kind:k,i:i};var a=k==='room'?f.rooms:k==='door'?f.doors:k==='marker'?f.markers:f.stairs,oo=a[desktopSelected.i];desktopDrag={type:'move',kind:k,i:desktopSelected.i,id:e.pointerId,start:p,orig:clone(oo)};safePointerCapture(dsvg,e.pointerId);renderDesktop();return
   }
-  if(desktopTool==='room'){desktopDrag={type:'room',id:e.pointerId,start:p,now:p};dsvg.setPointerCapture&&dsvg.setPointerCapture(e.pointerId);renderDesktop();return}
+  if(desktopTool==='room'){desktopDrag={type:'room',id:e.pointerId,start:p,now:p};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
   if(desktopTool==='door'||desktopTool==='doubleDoor'){var q=nearestWall(f.walls,p.x,p.y);if(q&&q.d<60){f.doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:desktopTool==='doubleDoor'?'double':'single',swing:1,hand:1});desktopSelected={kind:'door',i:f.doors.length-1};desktopTool='select';saveReviewData();renderDesktop()}return}
   if(desktopTool==='marker'){var b=document.querySelector('[data-marker][data-pending="1"]'),type=b?b.dataset.marker:'Marker';f.markers.push({type:type,x:p.x,y:p.y,rot:0,size:1});desktopSelected={kind:'marker',i:f.markers.length-1};if(b)delete b.dataset.pending;desktopTool='select';saveReviewData();renderDesktop()}
 };
