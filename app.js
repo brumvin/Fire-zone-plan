@@ -390,8 +390,8 @@ function scanEvidence(g,w,h,sens){
     function emit(){if(start===null||last-start<minLen||hits/(last-start+1)<.78)return;
       var x1=bx+ux*start,y1=by+uy*start,x2=bx+ux*last,y2=by+uy*last;
       var L=Math.hypot(x2-x1,y2-y1);
-      var dup=out.some(function(o){var vx=o.x2-o.x1,vy=o.y2-o.y1,ll=Math.hypot(vx,vy);if(Math.abs(vx*uy-vy*ux)/ll>.09)return false;
-        var dist=Math.abs((x1-o.x1)*vy-(y1-o.y1)*vx)/ll;if(dist>5)return false;
+      var dup=out.some(function(o){var vx=o.x2-o.x1,vy=o.y2-o.y1,ll=Math.hypot(vx,vy);if(Math.abs(vx*uy-vy*ux)/ll>.30)return false;
+        var dist=Math.max(Math.abs((x1-o.x1)*vy-(y1-o.y1)*vx),Math.abs((x2-o.x1)*vy-(y2-o.y1)*vx))/ll;if(dist>8)return false;
         var t1=(x1-o.x1)*vx/ll+(y1-o.y1)*vy/ll,t2=(x2-o.x1)*vx/ll+(y2-o.y1)*vy/ll;
         return Math.min(ll,Math.max(t1,t2))-Math.max(0,Math.min(t1,t2))>.7*Math.min(L,ll)});
       if(!dup)out.push({x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2),axis:Math.abs(uy)<.01?'H':Math.abs(ux)<.01?'V':'A',confidence:L>100?'medium':'review'});
