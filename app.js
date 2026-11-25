@@ -108,44 +108,36 @@ function wallSvg(w,i,sel){
   return '<g data-kind="wall" data-i="'+i+'"><line class="'+cls+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/><line class="wallHit" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/></g>'+handles;
 }
 function doorSvg(d,i,sel){
-  var size=d.size||1,swing=d.swing===-1?-1:1,hand=d.hand===-1?-1:1,type=d.type||'single';
-  var cls='door '+(sel?'selected':'');
-  var handle=sel?'<circle class="handle" data-kind="doorhandle" data-i="'+i+'" cx="'+(42*size)+'" cy="0" r="9"/>':'';
-
-  if(type==='double'){
-    // Conventional double-door plan symbol:
-    // hinges are at the two outer jambs; both leaves meet at the centre when closed.
-    var half=28*size,leaf=half;
-    var leftHinge=-half,rightHinge=half;
-    var leftOpenX=leftHinge,leftOpenY=swing*leaf;
-    var rightOpenX=rightHinge,rightOpenY=swing*leaf;
-    var sweepLeft=swing>0?0:1,sweepRight=swing>0?1:0;
-    var activeX=hand<0?-7*size:7*size;
-    var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-leaf-18)+'" width="'+(half*2+36)+'" height="'+(leaf*2+36)+'"/>';
-    return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
-      '<line class="'+cls+'" x1="'+leftHinge+'" y1="0" x2="'+leftOpenX+'" y2="'+leftOpenY+'"/>'+
-      '<line class="'+cls+'" x1="'+rightHinge+'" y1="0" x2="'+rightOpenX+'" y2="'+rightOpenY+'"/>'+
-      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+sweepLeft+' '+leftOpenX+' '+leftOpenY+'"/>'+
-      '<path class="door" d="M0 0 A'+leaf+' '+leaf+' 0 0 '+sweepRight+' '+rightOpenX+' '+rightOpenY+'"/>'+
-      '<line class="door doorClosedGuide" x1="'+leftHinge+'" y1="0" x2="0" y2="0"/>'+
-      '<line class="door doorClosedGuide" x1="0" y1="0" x2="'+rightHinge+'" y2="0"/>'+
-      '<circle class="doorActiveLeaf" cx="'+activeX+'" cy="0" r="'+(2.8*size)+'"/>'+
-      handle+'</g>'
+  var size=d.size||1,sw=d.swing===-1?-1:1,half=(d.type==='double'?28:22)*size;
+  var depth=d.type==='double'?half:half*2,cls='door '+(sel?'selected':'');
+  var out='<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+(d.angle||0)+')">';
+  out+='<rect class="hitbox" x="'+(-half-5)+'" y="'+(Math.min(0,sw*depth)-5)+'" width="'+(2*half+10)+'" height="'+(depth+10)+'"/>';
+  function leaf(h,c){var rad=Math.abs(c-h),y=sw*rad,flag=(c>h)===(sw>0)?1:0;
+    return '<line class="'+cls+'" style="stroke-width:2.5" x1="'+h+'" y1="0" x2="'+h+'" y2="'+y+'"/><path class="door" style="stroke-width:1.3" d="M'+c+' 0 A'+rad+' '+rad+' 0 0 '+flag+' '+h+' '+y+'"/>';
   }
-
-  // Conventional single-door symbol: one hinge at the selected jamb,
-  // leaf shown open at 90 degrees with an arc back to its closed position.
-  var width=44*size,half=width/2;
-  var hingeX=hand<0?half:-half;
-  var closedX=hand<0?-half:half;
-  var openX=hingeX,openY=swing*width;
-  var sweep=(hand<0)===(swing>0)?0:1;
-  var hit='<rect class="hitbox" x="'+(-half-18)+'" y="'+(-width-18)+'" width="'+(width+36)+'" height="'+(width*2+36)+'"/>';
-  return '<g data-kind="door" data-i="'+i+'" transform="translate('+d.x+' '+d.y+') rotate('+d.angle+')">'+hit+
-    '<line class="'+cls+'" x1="'+hingeX+'" y1="0" x2="'+openX+'" y2="'+openY+'"/>'+
-    '<path class="door" d="M'+closedX+' 0 A'+width+' '+width+' 0 0 '+sweep+' '+openX+' '+openY+'"/>'+
-    '<line class="door doorClosedGuide" x1="'+hingeX+'" y1="0" x2="'+closedX+'" y2="0"/>'+
-    handle+'</g>'
+  if(d.type==='double')out+=leaf(-half,0)+leaf(half,0);
+  else out+=d.hand===-1?leaf(half,-half):leaf(-half,half);
+  if(sel)out+='<circle class="handle" data-kind="doorhandle" data-i="'+i+'" cx="'+(42*size)+'" cy="0" r="7"/>';
+  return out+'</g>';
+}
+// Render actual openings in straight walls without deleting source geometry.
+function wallsWithOpenings(f,w,i,sel){
+  if(w.type==='ARC')return wallSvg(w,i,sel);
+  var dx=w.x2-w.x1,dy=w.y2-w.y1,L=Math.hypot(dx,dy);if(!L)return wallSvg(w,i,sel);
+  var ux=dx/L,uy=dy/L,gaps=[];
+  (f.doors||[]).forEach(function(d){
+    var q=nearestWall(f.walls,d.x,d.y);
+    if(!q||q.i!==i||q.d>4)return;
+    var a=(d.angle||0)*Math.PI/180;if(Math.abs(Math.sin(a-Math.atan2(dy,dx)))>.08)return;
+    var t=(d.x-w.x1)*ux+(d.y-w.y1)*uy,h=(d.type==='double'?28:22)*(d.size||1);
+    gaps.push([Math.max(0,t-h),Math.min(L,t+h)]);
+  });
+  if(!gaps.length)return wallSvg(w,i,sel);
+  gaps.sort(function(a,b){return a[0]-b[0]});var pos=0,out='';
+  function segment(a,b){if(b-a>.01)out+=wallSvg(Object.assign({},w,{x1:w.x1+a*ux,y1:w.y1+a*uy,x2:w.x1+b*ux,y2:w.y1+b*uy}),i,false)}
+  gaps.forEach(function(g){segment(pos,g[0]);pos=Math.max(pos,g[1])});segment(pos,L);
+  if(sel)out+='<circle class="handle" data-kind="wallhandle" data-i="'+i+'" data-end="1" cx="'+w.x1+'" cy="'+w.y1+'" r="9"/><circle class="handle" data-kind="wallhandle" data-i="'+i+'" data-end="2" cx="'+w.x2+'" cy="'+w.y2+'" r="9"/>';
+  return out;
 }
 function stairSvg(s,i,sel,kind){
   var sc=s.size||1,z='',left=-22*sc,right=22*sc,top=-23*sc,step=9*sc;
@@ -155,7 +147,8 @@ function stairSvg(s,i,sel,kind){
 }
 function markerSvg(m,i,sel){
   var label=esc(m.type),sc=m.size||1,w=Math.max(40,label.length*7+14)*sc,h=28*sc;
-  return '<g data-kind="marker" data-i="'+i+'" transform="translate('+m.x+' '+m.y+') rotate('+(m.rot||0)+')"><rect class="hitbox" x="'+(-w/2-8)+'" y="'+(-h/2-8)+'" width="'+(w+16)+'" height="'+(h+16)+'"/><rect class="marker '+(sel?'selected':'')+'" x="'+(-w/2)+'" y="'+(-h/2)+'" rx="5" width="'+w+'" height="'+h+'"/><text x="0" y="'+(4*sc)+'" text-anchor="middle" font-size="'+(11*sc)+'" font-weight="700">'+label+'</text></g>'
+  var handle=sel?'<circle class="handle" data-kind="markerhandle" data-i="'+i+'" cx="'+(w/2+8)+'" cy="'+(h/2+8)+'" r="7"/>':'';
+  return '<g data-kind="marker" data-i="'+i+'" transform="translate('+m.x+' '+m.y+') rotate('+(m.rot||0)+')"><rect class="hitbox" x="'+(-w/2-8)+'" y="'+(-h/2-8)+'" width="'+(w+16)+'" height="'+(h+16)+'"/><rect class="marker '+(sel?'selected':'')+'" x="'+(-w/2)+'" y="'+(-h/2)+'" rx="5" width="'+w+'" height="'+h+'"/><text x="0" y="'+(4*sc)+'" text-anchor="middle" font-size="'+(11*sc)+'" font-weight="700">'+label+'</text>'+handle+'</g>'
 }
 function roomSvg(r,i,sel){
   var cls='room zone'+(r.zone||0)+' '+(sel?'selected':''),
@@ -169,7 +162,7 @@ function renderEngineer(){
   var f=floor(),svg=$('engineerSvg'),s='<defs><pattern id="gridE" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0 L0 0 0 20" fill="none" stroke="#edf1f2" stroke-width="1"/></pattern></defs><rect width="760" height="500" fill="url(#gridE)"/>';
   if(f.source)s+='<image href="'+f.source+'" x="0" y="0" width="760" height="500" preserveAspectRatio="xMidYMid meet" opacity=".18"/>';
   f.rooms.forEach(function(r,i){s+=roomSvg(r,i,selected&&selected.kind==='room'&&selected.i===i)});
-  f.walls.forEach(function(w,i){s+=wallSvg(w,i,selected&&selected.kind==='wall'&&selected.i===i)});
+  f.walls.forEach(function(w,i){s+=wallsWithOpenings(f,w,i,selected&&selected.kind==='wall'&&selected.i===i)});
   f.doors.forEach(function(d,i){s+=doorSvg(d,i,selected&&selected.kind==='door'&&selected.i===i)});
   f.stairs.forEach(function(x,i){s+=stairSvg(x,i,selected&&selected.kind==='stairs'&&selected.i===i)});
   f.markers.forEach(function(x,i){s+=markerSvg(x,i,selected&&selected.kind==='marker'&&selected.i===i)});
@@ -230,24 +223,26 @@ esvg.onpointerdown=function(e){
   e.preventDefault();
   if(engineerView.pan){drag={type:'pan',id:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:engineerView.cx,cy:engineerView.cy,label:'engZoomLabel'};safePointerCapture(esvg,e.pointerId);return}
   var p=svgPoint(esvg,e),hit=e.target.closest('[data-kind]');
+  var direct=hit&&/^(door|stairs|marker|doorhandle|stairhandle|markerhandle|roomlabel)$/.test(hit.dataset.kind);
 
   // Drawing tools always win over existing hitboxes. This lets a new wall start
   // directly beside or from the end of an existing wall without moving it.
-  if(tool==='wall'||tool==='angle'||tool==='arc'||tool==='room'){
+  if(!direct&&(tool==='wall'||tool==='angle'||tool==='arc'||tool==='room')){
     drag={type:'draw',id:e.pointerId,start:p,now:p};safePointerCapture(esvg,e.pointerId);renderEngineer();return
   }
-  if(tool==='door'||tool==='doubleDoor'){var q=nearestWall(floor().walls,p.x,p.y);if(q&&q.d<60){snapshot();floor().doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:tool==='doubleDoor'?'double':'single',swing:1,hand:1});selected={kind:'door',i:floor().doors.length-1};renderEngineer();saveDraft(true)}return}
-  if(tool==='stairs'){snapshot();floor().stairs.push({x:p.x,y:p.y,rot:0,size:1});selected={kind:'stairs',i:floor().stairs.length-1};renderEngineer();saveDraft(true);return}
-  if(tool==='marker'&&pendingEngineerMarker){snapshot();floor().markers.push({type:pendingEngineerMarker,x:p.x,y:p.y,rot:0,size:1});selected={kind:'marker',i:floor().markers.length-1};pendingEngineerMarker=null;setTool('select');renderEngineer();saveDraft(true);return}
+  if(!direct&&(tool==='door'||tool==='doubleDoor')){var q=nearestWall(floor().walls,p.x,p.y);if(q&&q.d<60){snapshot();floor().doors.push({x:q.x,y:q.y,angle:q.angle,size:1,type:tool==='doubleDoor'?'double':'single',swing:1,hand:1});selected={kind:'door',i:floor().doors.length-1};renderEngineer();saveDraft(true)}return}
+  if(!direct&&tool==='stairs'){snapshot();floor().stairs.push({x:p.x,y:p.y,rot:0,size:1});selected={kind:'stairs',i:floor().stairs.length-1};renderEngineer();saveDraft(true);return}
+  if(!direct&&tool==='marker'&&pendingEngineerMarker){snapshot();floor().markers.push({type:pendingEngineerMarker,x:p.x,y:p.y,rot:0,size:1});selected={kind:'marker',i:floor().markers.length-1};pendingEngineerMarker=null;var keep=selected;setTool('select');selected=keep;renderEngineer();saveDraft(true);return}
 
   // Existing geometry is editable only in Select / move mode.
-  if(tool==='select'&&hit){
+  if(hit&&(tool==='select'||direct)){
     var kind=hit.dataset.kind,i=+hit.dataset.i;
     if(kind==='wallhandle'){
       selected={kind:'wall',i:i};snapshot();
       drag={type:'wall-end',kind:'wall',i:i,end:+hit.dataset.end,id:e.pointerId,start:p,orig:clone(floor().walls[i])};
       safePointerCapture(esvg,e.pointerId);renderEngineer();return
     }
+    if(kind==='markerhandle'){selected={kind:'marker',i:i};snapshot();drag={type:'marker-size',kind:'marker',i:i,id:e.pointerId,start:p,orig:clone(floor().markers[i])};safePointerCapture(esvg,e.pointerId);renderEngineer();return}
     if(kind==='stairhandle'){
       selected={kind:'stairs',i:i};snapshot();
       drag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(floor().stairs[i])};
@@ -293,9 +288,10 @@ esvg.onpointermove=function(e){
     var base=Math.hypot(30,34),dist=Math.hypot(p.x-drag.orig.x,p.y-drag.orig.y);
     o.size=clamp(dist/base,.25,3);renderEngineer();return
   }
+  if(drag.type==='marker-size'){o.size=clamp((drag.orig.size||1)*Math.hypot(p.x-o.x,p.y-o.y)/Math.max(1,Math.hypot(drag.start.x-o.x,drag.start.y-o.y)),.25,3);renderEngineer();return}
   if(drag.type==='door-size'){
     var doorDist=Math.hypot(p.x-drag.orig.x,p.y-drag.orig.y);
-    o.size=clamp(doorDist/36,.25,3);renderEngineer();return
+    o.size=clamp(doorDist/42,.25,3);renderEngineer();return
   }
   if(drag.type==='room-label'){
     o.labelX=p.x;o.labelY=p.y;renderEngineer();return
@@ -449,7 +445,7 @@ function renderReviewFloorTabs(){var s=reviewSub(),h='';if(!s)return;s.floors.fo
 function renderDesktop(){
   var f=reviewCurrentFloor();if(!f)return;f.rooms=f.rooms||[];f.markers=f.markers||[];var s='<rect width="760" height="500" fill="white"/>';
   f.rooms.forEach(function(r,i){s+=roomSvg(r,i,desktopSelected&&desktopSelected.kind==='room'&&desktopSelected.i===i)});
-  f.walls.forEach(function(w,i){s+=wallSvg(w,i,false)});
+  f.walls.forEach(function(w,i){s+=wallsWithOpenings(f,w,i,false)});
   f.doors.forEach(function(d,i){s+=doorSvg(d,i,desktopSelected&&desktopSelected.kind==='door'&&desktopSelected.i===i)});
   f.stairs.forEach(function(x,i){s+=stairSvg(x,i,desktopSelected&&desktopSelected.kind==='stairs'&&desktopSelected.i===i)});
   f.markers.forEach(function(x,i){s+=markerSvg(x,i,desktopSelected&&desktopSelected.kind==='marker'&&desktopSelected.i===i)});
@@ -522,9 +518,10 @@ dsvg.onpointerdown=function(e){
   e.preventDefault();var f=reviewCurrentFloor();if(!f)return;
   if(desktopView.pan){desktopDrag={type:'pan',id:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:desktopView.cx,cy:desktopView.cy,label:'deskZoomLabel'};safePointerCapture(dsvg,e.pointerId);return}
   var p=svgPoint(dsvg,e),hit=e.target.closest('[data-kind]');
-  if(hit){
+  if(hit&&(/^(door|stairs|marker|doorhandle|stairhandle|markerhandle|roomlabel)$/.test(hit.dataset.kind)||desktopTool==='select')){
     var k=hit.dataset.kind,i=+hit.dataset.i;
     if(k==='wall')return;
+    if(k==='markerhandle'){desktopSelected={kind:'marker',i:i};desktopDrag={type:'marker-size',kind:'marker',i:i,id:e.pointerId,start:p,orig:clone(f.markers[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
     if(k==='stairhandle'){desktopSelected={kind:'stairs',i:i};desktopDrag={type:'stair-size',kind:'stairs',i:i,id:e.pointerId,start:p,orig:clone(f.stairs[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
     if(k==='doorhandle'){desktopSelected={kind:'door',i:i};desktopDrag={type:'door-size',kind:'door',i:i,id:e.pointerId,start:p,orig:clone(f.doors[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
     if(k==='roomlabel'){desktopSelected={kind:'room',i:i};desktopDrag={type:'room-label',kind:'room',i:i,id:e.pointerId,start:p,orig:clone(f.rooms[i])};safePointerCapture(dsvg,e.pointerId);renderDesktop();return}
@@ -541,7 +538,8 @@ dsvg.onpointermove=function(e){
   if(desktopDrag.type==='room'){desktopDrag.now=p;renderDesktop();return}
   var a=desktopDrag.kind==='room'?f.rooms:desktopDrag.kind==='door'?f.doors:desktopDrag.kind==='marker'?f.markers:f.stairs,o=a[desktopDrag.i];
   if(desktopDrag.type==='stair-size'){var base=Math.hypot(30,34),dist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=clamp(dist/base,.25,3);renderDesktop();return}
-  if(desktopDrag.type==='door-size'){var doorDist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=clamp(doorDist/36,.25,3);renderDesktop();return}
+  if(desktopDrag.type==='marker-size'){o.size=clamp((desktopDrag.orig.size||1)*Math.hypot(p.x-o.x,p.y-o.y)/Math.max(1,Math.hypot(desktopDrag.start.x-o.x,desktopDrag.start.y-o.y)),.25,3);renderDesktop();return}
+  if(desktopDrag.type==='door-size'){var doorDist=Math.hypot(p.x-desktopDrag.orig.x,p.y-desktopDrag.orig.y);o.size=clamp(doorDist/42,.25,3);renderDesktop();return}
   if(desktopDrag.type==='room-label'){o.labelX=p.x;o.labelY=p.y;renderDesktop();return}
   var dx=p.x-desktopDrag.start.x,dy=p.y-desktopDrag.start.y;
   if(desktopDrag.kind==='room'){o.x=desktopDrag.orig.x+dx;o.y=desktopDrag.orig.y+dy;if(desktopDrag.orig.labelX!=null){o.labelX=desktopDrag.orig.labelX+dx;o.labelY=desktopDrag.orig.labelY+dy}}
@@ -565,7 +563,7 @@ $('finalSubmission').onchange=function(){renderFinalFloorOptions();renderFinal()
 function finalSub(){return queue.find(function(s){return s.id===$('finalSubmission').value})}
 function renderFinalFloorOptions(){var s=finalSub(),h='';if(!s)return;s.floors.forEach(function(f,i){h+='<option value="'+i+'">'+esc(f.name)+'</option>'});$('finalFloor').innerHTML=h}
 function finalPlanSvg(f){
-  var s='<rect width="760" height="500" fill="white"/>';f.rooms.forEach(function(r,i){s+=roomSvg(r,i,false)});f.walls.forEach(function(w,i){s+=wallSvg(w,i,false)});f.doors.forEach(function(d,i){s+=doorSvg(d,i,false)});f.stairs.forEach(function(x,i){s+=stairSvg(x,i,false)});(f.markers||[]).forEach(function(m,i){s+=markerSvg(m,i,false)});return s
+  var s='<rect width="760" height="500" fill="white"/>';f.rooms.forEach(function(r,i){s+=roomSvg(r,i,false)});f.walls.forEach(function(w,i){s+=wallsWithOpenings(f,w,i,false)});f.doors.forEach(function(d,i){s+=doorSvg(d,i,false)});f.stairs.forEach(function(x,i){s+=stairSvg(x,i,false)});(f.markers||[]).forEach(function(m,i){s+=markerSvg(m,i,false)});return s
 }
 function renderFinal(){
   var s=finalSub();if(!s)return;var f=s.floors[+$('finalFloor').value||0];if(!f)return;$('finalSvg').innerHTML=finalPlanSvg(f);$('finalSite').textContent=(s.customer||'')+' · '+(s.site||'')+' · '+(s.building||'')+' · '+f.name;$('finalRev').textContent='Revision '+(s.revision||'A')+' · '+(s.status||'');
