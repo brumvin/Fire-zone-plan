@@ -148,6 +148,7 @@ function stairSvg(s,i,sel,kind){
 function markerSvg(m,i,sel){
   var label=esc(m.type),sc=m.size||1,w=Math.max(40,label.length*7+14)*sc,h=28*sc;
   var handle=sel?'<circle class="handle" data-kind="markerhandle" data-i="'+i+'" cx="'+(w/2+8)+'" cy="'+(h/2+8)+'" r="7"/>':'';
+  if(m.scanText)return '<g data-kind="marker" data-i="'+i+'" transform="translate('+m.x+' '+m.y+') rotate('+(m.rot||0)+')"><rect class="hitbox" x="'+(-w/2)+'" y="'+(-h/2)+'" width="'+w+'" height="'+h+'"/><text x="0" y="0" text-anchor="middle" font-size="'+(13*sc)+'" font-weight="700" fill="#243541">'+label+'</text>'+handle+'</g>';
   return '<g data-kind="marker" data-i="'+i+'" transform="translate('+m.x+' '+m.y+') rotate('+(m.rot||0)+')"><rect class="hitbox" x="'+(-w/2-8)+'" y="'+(-h/2-8)+'" width="'+(w+16)+'" height="'+(h+16)+'"/><rect class="marker '+(sel?'selected':'')+'" x="'+(-w/2)+'" y="'+(-h/2)+'" rx="5" width="'+w+'" height="'+h+'"/><text x="0" y="'+(4*sc)+'" text-anchor="middle" font-size="'+(11*sc)+'" font-weight="700">'+label+'</text>'+handle+'</g>'
 }
 function roomSvg(r,i,sel){
@@ -173,6 +174,7 @@ function renderEngineer(){
     else s+='<line class="guide" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>'
   }
   if(scanPreview&&scanPreview.floor===f&&scanPreview.source===f.source)scanPreview.walls.forEach(function(w){s+='<line x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'" stroke="#1769aa" stroke-width="2" stroke-dasharray="5 3" pointer-events="none"/>'});
+  var tp=currentTextPreview();if(tp)tp.items.forEach(function(t){if(t.keep)s+='<text x="'+t.x+'" y="'+t.y+'" text-anchor="middle" font-size="13" fill="#1769aa" stroke="white" stroke-width="2" paint-order="stroke" pointer-events="none">'+esc(t.text)+'</text>'});
   svg.innerHTML=s;applyView(svg,engineerView,'engZoomLabel');
   $('drawingStats').textContent=f.walls.length+' walls · '+f.rooms.length+' rooms · '+f.doors.length+' doors · '+f.stairs.length+' stairs';
   $('selectedInfo').textContent=selected?(selected.kind==='wall'?'Wall selected. Drag either orange end handle to change its length; drag the line itself to move the whole wall.':selected.kind+' selected. Drag it directly or use the controls below.'):'Nothing selected.';
@@ -408,19 +410,83 @@ function detectLinesFromImage(img,sens){
   for(var i=0,p=0;i<d.length;i+=4,p++)g[p]=.2126*d[i]+.7152*d[i+1]+.0722*d[i+2];
   return scanEvidence(g,W,H,sens)
 }
-var scanPreview=null;
+function squareScan(walls,margin,orthogonal){
+  var out=[],m=margin/100;
+  walls.forEach(function(w){
+    var dx=w.x2-w.x1,dy=w.y2-w.y1,L=Math.hypot(dx,dy),mx=(w.x1+w.x2)/2,my=(w.y1+w.y2)/2;
+    if(mx<W*m||mx>W*(1-m)||my<H*m||my>H*(1-m))return;
+    if(orthogonal){
+      if(Math.abs(dy)<=Math.abs(dx)*.19){w.y1=w.y2=Math.round(my);w.axis='H'}
+      else if(Math.abs(dx)<=Math.abs(dy)*.19){w.x1=w.x2=Math.round(mx);w.axis='V'}
+    }
+    if(w.axis==='H'||w.axis==='V'){
+      var horiz=w.axis==='H',co=horiz?w.y1:w.x1,lo=Math.min(horiz?w.x1:w.y1,horiz?w.x2:w.y2),hi=Math.max(horiz?w.x1:w.y1,horiz?w.x2:w.y2);
+      var same=out.find(function(o){if(o.axis!==w.axis)return false;var c=horiz?o.y1:o.x1,a=Math.min(horiz?o.x1:o.y1,horiz?o.x2:o.y2),b=Math.max(horiz?o.x1:o.y1,horiz?o.x2:o.y2);return Math.abs(c-co)<=7&&Math.min(b,hi)-Math.max(a,lo)>.5*Math.min(b-a,hi-lo)});
+      if(same)return;
+    }
+    out.push(w)
+  });
+  // Align nearby parallel fragments to a shared coordinate, without filling gaps.
+  if(orthogonal) ['H','V'].forEach(function(axis){
+    var horiz=axis==='H',groups=[];
+    out.filter(function(w){return w.axis===axis}).sort(function(a,b){return wallLen(b)-wallLen(a)}).forEach(function(w){
+      var c=horiz?w.y1:w.x1,g=groups.find(function(z){return Math.abs(z.c-c)<=8});
+      if(g){if(horiz)w.y1=w.y2=g.c;else w.x1=w.x2=g.c}else groups.push({c:c})
+    })
+  });
+  return out
+}
+function scanTextMarker(t,x,y){return {type:t,x:x,y:y,rot:0,size:1,scanText:true}}
+var scanPreview=null, textPreview=null;
+function currentTextPreview(){return textPreview&&textPreview.floor===floor()&&textPreview.source===floor().source?textPreview:null}
+function showTextReview(){
+  var p=currentTextPreview(),el=$('scanTextReview');el.innerHTML='';
+  if(!p)return;
+  p.items.forEach(function(t,i){var row=document.createElement('div');row.className='toolbar';row.style.margin='4px 0';
+    var check=document.createElement('input');check.type='checkbox';check.checked=t.keep;check.onchange=function(){t.keep=check.checked;renderEngineer()};
+    var input=document.createElement('input');input.value=t.text;input.setAttribute('aria-label','Recognised label '+(i+1));input.oninput=function(){t.text=input.value;renderEngineer()};
+    row.append(check,input);el.append(row)
+  })
+}
+async function recogniseScanText(){
+  var f=floor(),source=f.source;if(!source){$('scanStatus').textContent='Upload a photo first.';return}
+  var btn=$('recogniseText');btn.disabled=true;var worker;
+  try{
+    $('scanStatus').textContent='Loading text recognition…';
+    var img=new Image();img.src=source;await img.decode();
+    var items=[],sc=Math.min(W/img.width,H/img.height),ox=(W-img.width*sc)/2,oy=(H-img.height*sc)/2;
+    if(typeof window.TextDetector==='function'){
+      try{var results=await new TextDetector().detect(img);items=results.map(function(t){var b=t.boundingBox;return {text:t.rawValue,x:ox+(b.x+b.width/2)*sc,y:oy+(b.y+b.height/2)*sc,keep:true}})}catch(e){}
+    }
+    if(!items.length){
+      if(!confirm('Load the browser OCR library and language model from public CDNs? Recognition runs in the browser. Use only approved test drawings.'))return;
+      if(!window.Tesseract)await new Promise(function(resolve,reject){var script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';script.onload=resolve;script.onerror=function(){reject(Error('OCR library unavailable'))};document.head.appendChild(script)});
+      worker=await window.Tesseract.createWorker('eng',1,{logger:function(m){if(m.status==='recognizing text')$('scanStatus').textContent='Recognising text '+Math.round(m.progress*100)+'%'}});
+      await worker.setParameters({tessedit_pageseg_mode:'11'});
+      var result=await worker.recognize(img,{}, {blocks:true});
+      (result.data.blocks||[]).forEach(function(b){(b.paragraphs||[]).forEach(function(p){(p.lines||[]).forEach(function(l){var q=l.bbox,t=(l.text||'').trim();if(t&&q&&/[a-zA-Z]/.test(t))items.push({text:t,x:ox+(q.x0+q.x1)/2*sc,y:oy+(q.y0+q.y1)/2*sc,keep:(l.confidence||0)>=45})})})})
+    }
+    if(floor()!==f||f.source!==source)return;
+    textPreview={floor:f,source:source,items:items};showTextReview();renderEngineer();
+    $('scanStatus').textContent=items.length+' text candidates. Correct spelling and tick the labels to add. Handwriting may be missed.';
+  }catch(e){$('scanStatus').textContent='Text recognition failed: '+e.message}
+  finally{if(worker)try{await worker.terminate()}catch(e){}btn.disabled=false}
+}
+
 $('scanBtn').onclick=function(){
   var f=floor();if(!f.source){$('scanStatus').textContent='Choose/take a photo first.';return}
   var source=f.source,img=new Image();$('scanStatus').textContent='Scanning wall evidence...';
   img.onerror=function(){$('scanStatus').textContent='Image could not be decoded.'};
-  img.onload=function(){try{var found=detectLinesFromImage(img,+$('sensitivity').value);if(floor()!==f||f.source!==source)return;
+  img.onload=function(){try{var found=squareScan(detectLinesFromImage(img,+$('sensitivity').value),+$('scanMargin').value,$('squareScan').checked);if(floor()!==f||f.source!==source)return;
     scanPreview={floor:f,source:source,walls:found};renderEngineer();
     $('scanStatus').textContent=found.length+' candidate sections. Blue dashed preview only; accept or discard below. Check all geometry against source.';
   }catch(e){$('scanStatus').textContent='Scan failed: '+e.message}};img.src=source
 };
 var scanControls=document.createElement('div');scanControls.className='toolbar';scanControls.style.marginTop='8px';
-scanControls.innerHTML='<button id="acceptScan">Accept candidates</button><button id="discardScan">Discard preview</button><label>Photo overlay <input id="scanOpacity" type="range" min="0" max="100" value="35"></label>';
+scanControls.innerHTML='<label><input id="squareScan" type="checkbox" checked> Straighten near-horizontal/vertical walls</label><label>Ignore edge margin % <input id="scanMargin" type="number" min="0" max="15" value="5" style="width:65px"></label><button id="acceptScan">Accept candidates</button><button id="discardScan">Discard preview</button><label>Photo overlay <input id="scanOpacity" type="range" min="0" max="100" value="35"></label><button id="recogniseText">Recognise text</button><button id="acceptText">Add checked labels</button><div id="scanTextReview" style="width:100%"></div>';
 $('scanStatus').after(scanControls);
+$('recogniseText').onclick=recogniseScanText;
+$('acceptText').onclick=function(){var p=currentTextPreview();if(!p)return;var labels=p.items.filter(function(t){return t.keep&&t.text.trim()});if(!labels.length)return;snapshot();labels.forEach(function(t){floor().markers.push(scanTextMarker(t.text.trim(),t.x,t.y))});textPreview=null;showTextReview();renderEngineer();saveDraft(true);$('scanStatus').textContent=labels.length+' editable text labels added.'};
 $('scanOpacity').oninput=function(){renderEngineer()};
 $('discardScan').onclick=function(){scanPreview=null;renderEngineer();$('scanStatus').textContent='Preview discarded. Existing drawing unchanged.'};
 $('acceptScan').onclick=function(){var f=floor();if(!scanPreview||scanPreview.floor!==f||scanPreview.source!==f.source||!scanPreview.walls.length){$('scanStatus').textContent='No candidates for this source.';return}
