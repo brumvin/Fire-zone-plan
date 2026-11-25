@@ -160,7 +160,7 @@ function roomSvg(r,i,sel){
 
 function renderEngineer(){
   var f=floor(),svg=$('engineerSvg'),s='<defs><pattern id="gridE" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0 L0 0 0 20" fill="none" stroke="#edf1f2" stroke-width="1"/></pattern></defs><rect width="760" height="500" fill="url(#gridE)"/>';
-  if(f.source)s+='<image href="'+f.source+'" x="0" y="0" width="760" height="500" preserveAspectRatio="xMidYMid meet" opacity=".18"/>';
+  if(f.source)s+='<image href="'+f.source+'" x="0" y="0" width="760" height="500" preserveAspectRatio="xMidYMid meet" opacity="'+(($('scanOpacity')?+$('scanOpacity').value:35)/100)+'"/>';
   f.rooms.forEach(function(r,i){s+=roomSvg(r,i,selected&&selected.kind==='room'&&selected.i===i)});
   f.walls.forEach(function(w,i){s+=wallsWithOpenings(f,w,i,selected&&selected.kind==='wall'&&selected.i===i)});
   f.doors.forEach(function(d,i){s+=doorSvg(d,i,selected&&selected.kind==='door'&&selected.i===i)});
@@ -172,6 +172,7 @@ function renderEngineer(){
     else if(tool==='room'){var x=Math.min(drag.start.x,drag.now.x),y=Math.min(drag.start.y,drag.now.y),rw=Math.abs(drag.now.x-drag.start.x),rh=Math.abs(drag.now.y-drag.start.y);s+='<rect class="guide" x="'+x+'" y="'+y+'" width="'+rw+'" height="'+rh+'"/>'}
     else s+='<line class="guide" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>'
   }
+  if(scanPreview&&scanPreview.floor===f&&scanPreview.source===f.source)scanPreview.walls.forEach(function(w){s+='<line x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'" stroke="#1769aa" stroke-width="2" stroke-dasharray="5 3" pointer-events="none"/>'});
   svg.innerHTML=s;applyView(svg,engineerView,'engZoomLabel');
   $('drawingStats').textContent=f.walls.length+' walls · '+f.rooms.length+' rooms · '+f.doors.length+' doors · '+f.stairs.length+' stairs';
   $('selectedInfo').textContent=selected?(selected.kind==='wall'?'Wall selected. Drag either orange end handle to change its length; drag the line itself to move the whole wall.':selected.kind+' selected. Drag it directly or use the controls below.'):'Nothing selected.';
@@ -363,25 +364,68 @@ $('photoInput').onchange=function(e){processPhotoFile(e.target.files&&e.target.f
 $('cameraInput').onchange=function(e){processPhotoFile(e.target.files&&e.target.files[0],e.target)};
 $('clearPhoto').onclick=function(){floor().source='';$('photoInput').value='';$('cameraInput').value='';loadFloorForm();renderEngineer();$('scanStatus').textContent='Photo cleared. Upload another photo or draw the plan manually.';saveDraft(true)}
 
-function detectLinesFromImage(img,sens){
-  var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,W,H);
-  var sc=Math.min(W/img.width,H/img.height),dw=img.width*sc,dh=img.height*sc,ox=(W-dw)/2,oy=(H-dh)/2;x.drawImage(img,ox,oy,dw,dh);
-  var d=x.getImageData(0,0,W,H).data,g=new Uint8Array(W*H),sum=0;
-  for(var i=0,p=0;i<d.length;i+=4,p++){var v=.2126*d[i]+.7152*d[i+1]+.0722*d[i+2];g[p]=v;sum+=v}
-  var mean=sum/g.length,thr=Math.max(80,Math.min(205,mean-(sens-50)*.55-28)),raw=[];
-  function dark(xx,yy){return g[yy*W+xx]<thr}
-  for(var y=3;y<H-3;y+=2){var st=-1,last=-1,gap=0,hits=0;for(var xx=3;xx<W-3;xx++){var hit=false;for(var yy=y-2;yy<=y+2;yy++)if(dark(xx,yy)){hit=true;break}if(hit){if(st<0)st=xx;last=xx;hits++;gap=0}else if(st>=0&&++gap>5){if(last-st>48&&hits/Math.max(1,last-st)>.42)raw.push({axis:'H',coord:y,lo:st,hi:last});st=-1;last=-1;gap=0;hits=0}}}
-  for(var xx=3;xx<W-3;xx+=2){var st2=-1,last2=-1,gap2=0,hits2=0;for(var yy2=3;yy2<H-3;yy2++){var hit2=false;for(var dx=-2;dx<=2;dx++)if(dark(xx+dx,yy2)){hit2=true;break}if(hit2){if(st2<0)st2=yy2;last2=yy2;hits2++;gap2=0}else if(st2>=0&&++gap2>5){if(last2-st2>48&&hits2/Math.max(1,last2-st2)>.42)raw.push({axis:'V',coord:xx,lo:st2,hi:last2});st2=-1;last2=-1;gap2=0;hits2=0}}}
-  var groups=[];
-  raw.forEach(function(s){var best=null;groups.forEach(function(gp){var ov=Math.min(gp.hi,s.hi)-Math.max(gp.lo,s.lo);if(!best&&gp.axis===s.axis&&Math.abs(gp.coord-s.coord)<=8&&ov>20)best=gp});if(best){best.m.push(s);best.coord=best.m.reduce(function(a,z){return a+z.coord},0)/best.m.length;best.lo=Math.min(best.lo,s.lo);best.hi=Math.max(best.hi,s.hi)}else groups.push({axis:s.axis,coord:s.coord,lo:s.lo,hi:s.hi,m:[s]})});
-  var walls=[];groups.forEach(function(gp){if(gp.m.length<2)return;var coords=gp.m.map(function(z){return z.coord}).sort(function(a,b){return a-b}),los=gp.m.map(function(z){return z.lo}).sort(function(a,b){return a-b}),his=gp.m.map(function(z){return z.hi}).sort(function(a,b){return a-b}),mid=Math.floor(gp.m.length/2),co=snap(coords[mid]),lo=snap(los[mid]),hi=snap(his[mid]);if(hi-lo<55)return;var conf=gp.m.length>=5?'high':'medium';walls.push(gp.axis==='H'?{x1:lo,y1:co,x2:hi,y2:co,axis:'H',confidence:conf}:{x1:co,y1:lo,x2:co,y2:hi,axis:'V',confidence:conf})});
-  var out=[];walls.sort(function(a,b){return wallLen(b)-wallLen(a)}).forEach(function(w){var dup=out.some(function(o){if(o.axis!==w.axis)return false;var dc=Math.abs((o.axis==='H'?o.y1:o.x1)-(w.axis==='H'?w.y1:w.x1));var ov=w.axis==='H'?Math.min(o.x2,w.x2)-Math.max(o.x1,w.x1):Math.min(o.y2,w.y2)-Math.max(o.y1,w.y1);return dc<=5&&ov>Math.min(wallLen(o),wallLen(w))*.7});if(!dup)out.push(w)});
-  return out.slice(0,90)
+function scanEvidence(g,w,h,sens){
+  // Local mean threshold using summed-area table; no external service.
+  var stride=w+1,I=new Float64Array(stride*(h+1)),ink=new Uint8Array(w*h),points=[];
+  for(var y=1;y<=h;y++){var row=0;for(var x=1;x<=w;x++){row+=g[(y-1)*w+x-1];I[y*stride+x]=I[(y-1)*stride+x]+row}}
+  var bias=28-(sens-50)*.42;
+  for(var y=2;y<h-2;y++)for(var x=2;x<w-2;x++){
+    var l=Math.max(0,x-18),r=Math.min(w,x+19),t=Math.max(0,y-18),b=Math.min(h,y+19);
+    var mean=(I[b*stride+r]-I[t*stride+r]-I[b*stride+l]+I[t*stride+l])/((r-l)*(b-t));
+    if(g[y*w+x]<mean-bias){ink[y*w+x]=1;if((x+y)%3===0)points.push([x,y])}
+  }
+  // Hough peaks, then recover separate pixel-supported runs along each axis.
+  var D=Math.ceil(Math.hypot(w,h)),bins=2*D+1,angles=[],acc=new Uint32Array(180*bins);
+  for(var a=0;a<180;a++){var rad=a*Math.PI/180;angles.push([Math.cos(rad),Math.sin(rad)])}
+  var step=Math.max(1,Math.ceil(points.length/25000));
+  for(var j=0;j<points.length;j+=step){var p=points[j];for(var a=0;a<180;a++){var n=angles[a],rho=Math.round(p[0]*n[0]+p[1]*n[1])+D;acc[a*bins+rho]++}}
+  var peaks=[];for(var a=0;a<180;a++)for(var k=2;k<bins-2;k++){var v=acc[a*bins+k];if(v>=Math.max(5,10/step)&&v>=acc[a*bins+k-1]&&v>=acc[a*bins+k+1])peaks.push({a:a,r:k-D,v:v})}
+  peaks.sort(function(a,b){return b.v-a.v});
+  var chosen=[],out=[],minLen=Math.max(18,42-(sens-50)*.45);
+  function nearPeak(p,q){var da=Math.abs(p.a-q.a);return da<4&&Math.abs(p.r-q.r)<5||da>176&&Math.abs(p.r+q.r)<5}
+  function supported(x,y,nx,ny){for(var d=-2;d<=2;d++){var xx=Math.round(x+d*nx),yy=Math.round(y+d*ny);if(xx>=0&&xx<w&&yy>=0&&yy<h&&ink[yy*w+xx])return true}return false}
+  for(var pi=0;pi<peaks.length&&chosen.length<180;pi++){
+    var pk=peaks[pi];if(chosen.some(function(q){return nearPeak(pk,q)}))continue;chosen.push(pk);
+    var n=angles[pk.a],ux=-n[1],uy=n[0],bx=pk.r*n[0],by=pk.r*n[1],start=null,last=0,hits=0;
+    function emit(){if(start===null||last-start<minLen||hits/(last-start+1)<.78)return;
+      var x1=bx+ux*start,y1=by+uy*start,x2=bx+ux*last,y2=by+uy*last;
+      var L=Math.hypot(x2-x1,y2-y1);
+      var dup=out.some(function(o){var vx=o.x2-o.x1,vy=o.y2-o.y1,ll=Math.hypot(vx,vy);if(Math.abs(vx*uy-vy*ux)/ll>.09)return false;
+        var dist=Math.abs((x1-o.x1)*vy-(y1-o.y1)*vx)/ll;if(dist>5)return false;
+        var t1=(x1-o.x1)*vx/ll+(y1-o.y1)*vy/ll,t2=(x2-o.x1)*vx/ll+(y2-o.y1)*vy/ll;
+        return Math.min(ll,Math.max(t1,t2))-Math.max(0,Math.min(t1,t2))>.7*Math.min(L,ll)});
+      if(!dup)out.push({x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2),axis:Math.abs(uy)<.01?'H':Math.abs(ux)<.01?'V':'A',confidence:L>100?'medium':'review'});
+    }
+    for(var t=-D;t<=D;t++){if(supported(bx+ux*t,by+uy*t,n[0],n[1])){if(start===null)start=t;last=t;hits++}else if(start!==null&&t-last>3){emit();start=null;hits=0}}
+    emit();
+  }
+  return out;
 }
+function detectLinesFromImage(img,sens){
+  var c=document.createElement('canvas');c.width=W;c.height=H;var ctx=c.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  var sc=Math.min(W/img.width,H/img.height),dw=img.width*sc,dh=img.height*sc;ctx.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
+  var d=ctx.getImageData(0,0,W,H).data,g=new Uint8Array(W*H);
+  for(var i=0,p=0;i<d.length;i+=4,p++)g[p]=.2126*d[i]+.7152*d[i+1]+.0722*d[i+2];
+  return scanEvidence(g,W,H,sens)
+}
+var scanPreview=null;
 $('scanBtn').onclick=function(){
-  if(!floor().source){$('scanStatus').textContent='Choose/take a photo first.';return}
-  $('scanStatus').textContent='Scanning wall evidence...';var img=new Image();img.onload=function(){snapshot();var found=detectLinesFromImage(img,+$('sensitivity').value);floor().walls=found;selected=null;renderEngineer();$('scanStatus').textContent='Evidence scan retained '+found.length+' likely wall sections. Compare every line with the source image and edit anything that is wrong.';saveDraft(true)};img.src=floor().source
+  var f=floor();if(!f.source){$('scanStatus').textContent='Choose/take a photo first.';return}
+  var source=f.source,img=new Image();$('scanStatus').textContent='Scanning wall evidence...';
+  img.onerror=function(){$('scanStatus').textContent='Image could not be decoded.'};
+  img.onload=function(){try{var found=detectLinesFromImage(img,+$('sensitivity').value);if(floor()!==f||f.source!==source)return;
+    scanPreview={floor:f,source:source,walls:found};renderEngineer();
+    $('scanStatus').textContent=found.length+' candidate sections. Blue dashed preview only; accept or discard below. Check all geometry against source.';
+  }catch(e){$('scanStatus').textContent='Scan failed: '+e.message}};img.src=source
 };
+var scanControls=document.createElement('div');scanControls.className='toolbar';scanControls.style.marginTop='8px';
+scanControls.innerHTML='<button id="acceptScan">Accept candidates</button><button id="discardScan">Discard preview</button><label>Photo overlay <input id="scanOpacity" type="range" min="0" max="100" value="35"></label>';
+$('scanStatus').after(scanControls);
+$('scanOpacity').oninput=function(){renderEngineer()};
+$('discardScan').onclick=function(){scanPreview=null;renderEngineer();$('scanStatus').textContent='Preview discarded. Existing drawing unchanged.'};
+$('acceptScan').onclick=function(){var f=floor();if(!scanPreview||scanPreview.floor!==f||scanPreview.source!==f.source||!scanPreview.walls.length){$('scanStatus').textContent='No candidates for this source.';return}
+  if(f.walls.length&&!confirm('Append candidate walls to existing drawing? Check for duplicates afterwards.'))return;
+  snapshot();f.walls=f.walls.concat(scanPreview.walls);scanPreview=null;selected=null;renderEngineer();saveDraft(true);$('scanStatus').textContent='Candidates added. Review and correct before submission.'};
 
 function surveyReadiness(){
   var hard=[],warnings=[];
