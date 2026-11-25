@@ -173,9 +173,14 @@ function renderEngineer(){
     else if(tool==='room'){var x=Math.min(drag.start.x,drag.now.x),y=Math.min(drag.start.y,drag.now.y),rw=Math.abs(drag.now.x-drag.start.x),rh=Math.abs(drag.now.y-drag.start.y);s+='<rect class="guide" x="'+x+'" y="'+y+'" width="'+rw+'" height="'+rh+'"/>'}
     else s+='<line class="guide" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'"/>'
   }
-  if(scanPreview&&scanPreview.floor===f&&scanPreview.source===f.source)scanPreview.walls.forEach(function(w){s+='<line x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'" stroke="#1769aa" stroke-width="2" stroke-dasharray="5 3" pointer-events="none"/>'});
+  var sp=activeScan();if(sp)sp.walls.forEach(function(w,i){
+    var active=i===scanSelected,col=active?'#ed6a32':'#1769aa';
+    s+='<line x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'" stroke="'+col+'" stroke-width="'+(active?3:2)+'" stroke-dasharray="5 3" pointer-events="none"/>';
+    s+='<line data-kind="scanwall" data-i="'+i+'" x1="'+w.x1+'" y1="'+w.y1+'" x2="'+w.x2+'" y2="'+w.y2+'" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke" pointer-events="stroke"/>';
+    if(active)[1,2].forEach(function(n){s+='<circle class="handle" data-kind="scanend" data-i="'+i+'" data-end="'+n+'" cx="'+w['x'+n]+'" cy="'+w['y'+n]+'" r="'+(8/engineerView.zoom)+'"/>'})
+  });
   var tp=currentTextPreview();if(tp)tp.items.forEach(function(t){if(t.keep)s+='<text x="'+t.x+'" y="'+t.y+'" text-anchor="middle" font-size="13" fill="#1769aa" stroke="white" stroke-width="2" paint-order="stroke" pointer-events="none">'+esc(t.text)+'</text>'});
-  svg.innerHTML=s;applyView(svg,engineerView,'engZoomLabel');
+  svg.innerHTML=s;reviewScanUI();applyView(svg,engineerView,'engZoomLabel');
   $('drawingStats').textContent=f.walls.length+' walls · '+f.rooms.length+' rooms · '+f.doors.length+' doors · '+f.stairs.length+' stairs';
   $('selectedInfo').textContent=selected?(selected.kind==='wall'?'Wall selected. Drag either orange end handle to change its length; drag the line itself to move the whole wall.':selected.kind+' selected. Drag it directly or use the controls below.'):'Nothing selected.';
   syncEngineerSizeControls()
@@ -226,6 +231,7 @@ esvg.onpointerdown=function(e){
   e.preventDefault();
   if(engineerView.pan){drag={type:'pan',id:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:engineerView.cx,cy:engineerView.cy,label:'engZoomLabel'};safePointerCapture(esvg,e.pointerId);return}
   var p=svgPoint(esvg,e),hit=e.target.closest('[data-kind]');
+  if(scanPointerDown(e,hit))return;
   var direct=hit&&/^(door|stairs|marker|doorhandle|stairhandle|markerhandle|roomlabel)$/.test(hit.dataset.kind);
 
   // Drawing tools always win over existing hitboxes. This lets a new wall start
@@ -268,6 +274,7 @@ esvg.onpointerdown=function(e){
   if(tool==='select'){selected=null;renderEngineer()}
 };
 esvg.onpointermove=function(e){
+  if(scanPointerMove(e))return;
   if(!drag||drag.id!==e.pointerId)return;e.preventDefault();
   if(drag.type==='pan'){panMove(esvg,engineerView,drag,e);return}
   var p=svgPoint(esvg,e);
@@ -307,6 +314,7 @@ esvg.onpointermove=function(e){
   else{o.x=drag.orig.x+dx;o.y=drag.orig.y+dy}renderEngineer()
 };
 function finishEngineer(e){
+  if(scanPointerFinish(e))return;
   if(!drag||drag.id!==e.pointerId)return;
   if(drag.type==='draw'){snapshot();var a=drag.start,b=drag.now;
     if(tool==='room'){var x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),rw=Math.abs(b.x-a.x),rh=Math.abs(b.y-a.y);if(rw>=30&&rh>=30){floor().rooms.push({id:uid(),x:x,y:y,w:rw,h:rh,name:'Room '+(floor().rooms.length+1),zone:0,labelX:null,labelY:null});selected={kind:'room',i:floor().rooms.length-1}}}
@@ -437,7 +445,64 @@ function squareScan(walls,margin,orthogonal){
   return out
 }
 function scanTextMarker(t,x,y){return {type:t,x:x,y:y,rot:0,size:1,scanText:true}}
-var scanPreview=null, textPreview=null;
+var scanPreview=null, textPreview=null, scanSelected=-1, scanDrag=null;
+function activeScan(){return scanPreview&&scanPreview.floor===floor()&&scanPreview.source===floor().source?scanPreview:null}
+function reviewScanUI(){
+  var p=activeScan(),w=p&&p.walls[scanSelected],el=$('scanWallInfo');
+  if(!el)return;
+  el.textContent=p?p.walls.length+' pending walls'+(w?' · Selected '+(scanSelected+1)+' · '+Math.round(wallLen(w))+' drawing units':' · Tap a blue wall to edit'):'No active scan preview';
+  ['scanKeepWall','scanRejectWall','scanHorizontal','scanVertical'].forEach(function(id){$(id).disabled=!w});
+  $('scanAddWall').disabled=!p;
+}
+function scanSnapPoint(p,w,end,axis){
+  if(!$('scanSnap').checked)return p;
+  var all=activeScan().walls.concat(floor().walls),best=null,dist=9;
+  all.forEach(function(o){if(o===w||o.type==='ARC')return;
+    var candidates=[{x:o.x1,y:o.y1},{x:o.x2,y:o.y2}];
+    if(axis==='H'&&o.axis==='V'&&p.y>=Math.min(o.y1,o.y2)-9&&p.y<=Math.max(o.y1,o.y2)+9)candidates.push({x:o.x1,y:p.y});
+    if(axis==='V'&&o.axis==='H'&&p.x>=Math.min(o.x1,o.x2)-9&&p.x<=Math.max(o.x1,o.x2)+9)candidates.push({x:p.x,y:o.y1});
+    candidates.forEach(function(q){var v=axis==='H'?{x:q.x,y:p.y}:axis==='V'?{x:p.x,y:q.y}:q;
+      var d=Math.hypot(q.x-p.x,q.y-p.y);if(d<dist){dist=d;best=v}})
+  });return best||p
+}
+function scanPoint(e){var q=esvg.createSVGPoint();q.x=e.clientX;q.y=e.clientY;var p=q.matrixTransform(esvg.getScreenCTM().inverse());return {x:clamp(p.x,0,W),y:clamp(p.y,0,H)}}
+function scanWallAction(action){
+  var p=activeScan(),w=p&&p.walls[scanSelected];if(!w)return;
+  if(action==='keep'){snapshot();floor().walls.push(clone(w));p.walls.splice(scanSelected,1);scanSelected=-1;saveDraft(true)}
+  if(action==='reject'){p.walls.splice(scanSelected,1);scanSelected=-1}
+  if(action==='H'){w.y1=w.y2=(w.y1+w.y2)/2;w.axis='H'}
+  if(action==='V'){w.x1=w.x2=(w.x1+w.x2)/2;w.axis='V'}
+  renderEngineer()
+}
+function scanPointerDown(e,hit){
+  var p=activeScan();if(!p)return false;
+  var kind=hit&&hit.dataset.kind,pt=scanPoint(e);
+  if(kind==='scanend'||(kind==='scanwall'&&$('scanAddWall').getAttribute('aria-pressed')!=='true')){
+    scanSelected=+hit.dataset.i;var w=p.walls[scanSelected];if(!w)return false;
+    selected=null;scanDrag={id:e.pointerId,p:p,w:w,orig:clone(w),start:pt,end:kind==='scanend'?+hit.dataset.end:0};safePointerCapture(esvg,e.pointerId);renderEngineer();return true
+  }
+  if($('scanAddWall').getAttribute('aria-pressed')==='true'){
+    var w={x1:pt.x,y1:pt.y,x2:pt.x,y2:pt.y,axis:'A',confidence:'review'};
+    p.walls.push(w);scanSelected=p.walls.length-1;scanDrag={id:e.pointerId,p:p,w:w,orig:clone(w),start:pt,end:2,adding:true};safePointerCapture(esvg,e.pointerId);renderEngineer();return true
+  }return false
+}
+function scanPointerMove(e){
+  var d=scanDrag;if(!d||d.id!==e.pointerId)return false;
+  if(activeScan()!==d.p){scanDrag=null;return true}
+  var p=scanPoint(e),w=d.w,o=d.orig,dx=p.x-d.start.x,dy=p.y-d.start.y;
+  if(d.adding&&$('squareScan').checked)w.axis=Math.abs(dx)>=Math.abs(dy)?'H':'V';
+  if(d.end){var n=d.end,axis=w.axis,q={x:o['x'+n]+dx,y:o['y'+n]+dy};
+    if(axis==='H')q.y=w['y'+(3-n)];if(axis==='V')q.x=w['x'+(3-n)];
+    q=scanSnapPoint(q,w,n,axis);w['x'+n]=q.x;w['y'+n]=q.y
+  }else{dx=clamp(dx,-Math.min(o.x1,o.x2),W-Math.max(o.x1,o.x2));dy=clamp(dy,-Math.min(o.y1,o.y2),H-Math.max(o.y1,o.y2));w.x1=o.x1+dx;w.x2=o.x2+dx;w.y1=o.y1+dy;w.y2=o.y2+dy}
+  renderEngineer();return true
+}
+function scanPointerFinish(e){
+  var d=scanDrag;if(!d||d.id!==e.pointerId)return false;
+  if(e.type==='pointercancel'||wallLen(d.w)<5){if(d.adding){d.p.walls.splice(d.p.walls.indexOf(d.w),1);scanSelected=-1}else Object.assign(d.w,d.orig)}
+  scanDrag=null;$('scanAddWall').setAttribute('aria-pressed','false');renderEngineer();return true
+}
+
 function currentTextPreview(){return textPreview&&textPreview.floor===floor()&&textPreview.source===floor().source?textPreview:null}
 function showTextReview(){
   var p=currentTextPreview(),el=$('scanTextReview');el.innerHTML='';
@@ -478,13 +543,21 @@ $('scanBtn').onclick=function(){
   var source=f.source,img=new Image();$('scanStatus').textContent='Scanning wall evidence...';
   img.onerror=function(){$('scanStatus').textContent='Image could not be decoded.'};
   img.onload=function(){try{var found=squareScan(detectLinesFromImage(img,+$('sensitivity').value),+$('scanMargin').value,$('squareScan').checked);if(floor()!==f||f.source!==source)return;
-    scanPreview={floor:f,source:source,walls:found};renderEngineer();
-    $('scanStatus').textContent=found.length+' candidate sections. Blue dashed preview only; accept or discard below. Check all geometry against source.';
+    scanPreview={floor:f,source:source,walls:found};scanSelected=-1;renderEngineer();
+    $('scanStatus').textContent=found.length+' candidate sections. Tap a blue wall to move or resize it; keep or reject individually. Check all geometry against source.';
   }catch(e){$('scanStatus').textContent='Scan failed: '+e.message}};img.src=source
 };
 var scanControls=document.createElement('div');scanControls.className='toolbar';scanControls.style.marginTop='8px';
 scanControls.innerHTML='<label><input id="squareScan" type="checkbox" checked> Straighten near-horizontal/vertical walls</label><label>Ignore edge margin % <input id="scanMargin" type="number" min="0" max="15" value="5" style="width:65px"></label><button id="acceptScan">Accept candidates</button><button id="discardScan">Discard preview</button><label>Photo overlay <input id="scanOpacity" type="range" min="0" max="100" value="35"></label><button id="recogniseText">Recognise text</button><button id="acceptText">Add checked labels</button><div id="scanTextReview" style="width:100%"></div>';
 $('scanStatus').after(scanControls);
+var reviewBar=document.createElement('div');reviewBar.className='panel';reviewBar.style.margin='8px 0';
+reviewBar.innerHTML='<b>Scan wall review</b><div id="scanWallInfo" class="small" style="margin:6px 0"></div><div class="toolbar"><button id="scanKeepWall">Keep selected</button><button id="scanRejectWall">Reject selected</button><button id="scanHorizontal">Make horizontal</button><button id="scanVertical">Make vertical</button><button id="scanAddWall" aria-pressed="false">Draw missing wall</button><label><input id="scanSnap" type="checkbox" checked> Snap junctions</label></div>';
+$('engineerSvg').parentElement.before(reviewBar);
+$('scanKeepWall').onclick=function(){scanWallAction('keep')};
+$('scanRejectWall').onclick=function(){scanWallAction('reject')};
+$('scanHorizontal').onclick=function(){scanWallAction('H')};
+$('scanVertical').onclick=function(){scanWallAction('V')};
+$('scanAddWall').onclick=function(){this.setAttribute('aria-pressed',String(this.getAttribute('aria-pressed')!=='true'))};
 $('recogniseText').onclick=recogniseScanText;
 $('acceptText').onclick=function(){var p=currentTextPreview();if(!p)return;var labels=p.items.filter(function(t){return t.keep&&t.text.trim()});if(!labels.length)return;snapshot();labels.forEach(function(t){floor().markers.push(scanTextMarker(t.text.trim(),t.x,t.y))});textPreview=null;showTextReview();renderEngineer();saveDraft(true);$('scanStatus').textContent=labels.length+' editable text labels added.'};
 $('scanOpacity').oninput=function(){renderEngineer()};
@@ -498,6 +571,7 @@ function surveyReadiness(){
   if(!String(state.customer||$('customer').value||'').trim())warnings.push('Customer not entered');
   if(!String(state.site||$('site').value||'').trim())warnings.push('Site not entered');
   state.floors.forEach(function(f){
+    if(scanPreview&&scanPreview.floor===f&&scanPreview.source===f.source&&scanPreview.walls.length)hard.push(f.name+': unresolved scan candidates');
     if(!f.walls||!f.walls.length)hard.push(f.name+': no wall geometry');
     if(f.status!=='Ready')hard.push(f.name+': not marked Ready');
     if(!f.checks.exits)warnings.push(f.name+': exits not confirmed');
